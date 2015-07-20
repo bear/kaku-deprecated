@@ -128,7 +128,7 @@ def checkAuth():
     return authed, indieauth_id
 
 def checkAccessToken(access_token):
-    if db is not None:
+    if access_token is not None and db is not None:
         key = db.get('token-%s' % access_token)
         if key:
             data      = key.split('-')
@@ -163,7 +163,7 @@ def handleLogin():
     if form.validate_on_submit():
         app.logger.info('me [%s]' % form.me.data)
 
-        me            = baseDomain(form.me.data)
+        me            = 'https://%s' % baseDomain(form.me.data, includeScheme=False)
         authEndpoints = ninka.indieauth.discoverAuthEndpoints(me)
 
         if 'authorization_endpoint' in authEndpoints:
@@ -206,8 +206,9 @@ def handleLogin():
 @app.route('/success', methods=['GET',])
 def handleLoginSuccess():
     app.logger.info('handleLoginSuccess [%s]' % request.method)
-    me   = request.args.get('me')
-    code = request.args.get('code')
+    scope = None
+    me    = request.args.get('me')
+    code  = request.args.get('code')
     app.logger.info('me [%s] code [%s]' % (me, code))
 
     if db is not None:
@@ -451,19 +452,19 @@ def getRedis(config):
         config.db = 0
     return redis.StrictRedis(host=config.host, port=config.port, db=config.db)
 
-def doStart(app, configFile, ourHost=None, ourPort=None, ourBasePath=None, ourPath=None, echo=False):
-    _cfg = loadConfig(configFile, host=ourHost, port=ourPort, basepath=ourBasePath, logpath=ourPath)
+def doStart(app, configFile, ourHost=None, ourPort=None, ourPath=None, echo=False):
+    _cfg = loadConfig(configFile, host=ourHost, port=ourPort, logpath=ourPath)
     _db  = None
     if 'secret' in _cfg:
         app.config['SECRET_KEY'] = _cfg.secret
     initLogging(app.logger, _cfg.paths.log, echo=echo)
     if 'redis' in _cfg:
         _db = getRedis(_cfg.redis)
+    events = Events(_cfg.paths.handlers)
     return _cfg, _db
 
 if _uwsgi:
     cfg, db = doStart(app, _configFile, _ourPath)
-    events  = Events(cfg.handlerspath)
 #
 # None of the below will be run for nginx + uwsgi
 #
@@ -474,11 +475,9 @@ if __name__ == '__main__':
     parser.add_argument('--host',     default='0.0.0.0')
     parser.add_argument('--port',     default=5000, type=int)
     parser.add_argument('--logpath',  default='.')
-    parser.add_argument('--basepath', default='/opt/kaku/')
     parser.add_argument('--config',   default='./kaku.cfg')
 
     args    = parser.parse_args()
-    cfg, db = doStart(app, args.config, args.host, args.port, args.basepath, args.logpath, echo=True)
-    events  = Events(cfg.handlerspath)
+    cfg, db = doStart(app, args.config, args.host, args.port, args.logpath, echo=True)
 
     app.run(host=cfg.host, port=cfg.port, debug=True)

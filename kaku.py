@@ -77,8 +77,29 @@ app.config['SECRET_KEY'] = 'foo'  # replaced downstream
 cfg    = None
 db     = None
 events = None
-templateData = {}
+templateContext = {}
+templateCache   = {}
 
+def getDomainConfig(domain=None):
+    result = None
+    if domain is not None:
+        if domain not in templateCache:
+            templateCache[domain] = Config()
+            templateCache[domain].fromJson(config[domain])
+        result = templateCache[domain]
+    if result is None:
+        result = Config()
+    return result
+
+def buildTemplateContext(config, domain):
+    templateContext = {}
+    domainConfig    = getDomainConfig(domain)
+    for key in ('baseurl', 'title', 'meta'):
+        if key in domainConfig:
+            value = domainConfig[key]
+        else:
+            value = ''
+        templateContext[key] = value
 
 def clearAuth():
     if 'indieauth_token' in session:
@@ -128,6 +149,7 @@ def handleLogout():
 def handleLogin():
     app.logger.info('handleLogin [%s]' % request.method)
 
+    me          = None
     redirectURI = '%s/success' % cfg.baseurl
     fromURI     = request.args.get('from_uri')
     # if fromURI is None:
@@ -176,9 +198,10 @@ def handleLogin():
         else:
             return 'insert fancy no auth endpoint found error message here', 403
 
-    templateData['title'] = 'Sign In'
-    templateData['form']  = form
-    return render_template('login.jinja', **templateData)
+    buildTemplateContext(cfg, me)
+    templateContext['title'] = 'Sign In'
+    templateContext['form']  = form
+    return render_template('login.jinja', **templateContext)
 
 @app.route('/success', methods=['GET',])
 def handleLoginSuccess():
@@ -266,9 +289,8 @@ def handleMicroPub():
                     for key in ('h', 'name', 'summary', 'content', 'published', 'updated', 'category', 
                                 'slug', 'location', 'in-reply-to', 'repost-of', 'syndication', 'syndicate-to'):
                         data[key] = request.form.get(key)
-                    # return processMicroPub(data)
                     events('micropub', 'setup', cfg, app.logger)
-                    return events('micropub', 'process', data)
+                    return events('micropub', 'process', data, getDomainConfig(domain))
                 else:
                     return 'unauthorized', 401
         elif request.method == 'GET':
@@ -350,11 +372,9 @@ def mention(sourceURL, targetURL, vouchDomain=None):
     for href in mentions['refs']:
         if href != sourceURL and href == targetURL:
             app.logger.info('post at %s was referenced by %s' % (targetURL, sourceURL))
-
-            # event.inboundWebmention(sourceURL, targetURL, mentions=mentions)
-            # result = processWebmention(sourceURL, targetURL, vouchDomain)
             events('webmention', 'setup', cfg, app.logger)
-            result = events('webmention', 'inbound', sourceURL, targetURL, vouchDomain)
+            domain = baseDomain(targetURL, includeScheme=False)
+            result = events('webmention', 'inbound', sourceURL, targetURL, vouchDomain, getDomainConfig(domain))
     app.logger.info('mention() returning %s' % result)
     return result
 
@@ -405,7 +425,7 @@ def initLogging(logger, logpath=None, echo=False):
     logger.setLevel(logging.INFO)
     logger.info('starting kaku')
 
-def loadConfig(configFilename, host=None, port=None, basepath=None, logpath=None):
+def loadConfig(configFilename, host=None, port=None, logpath=None):
     result = Config()
     result.fromJson(configFilename)
 
@@ -413,10 +433,8 @@ def loadConfig(configFilename, host=None, port=None, basepath=None, logpath=None
         result.host = host
     if port is not None:
         result.port = port
-    if basepath is not None:
-        result.basepath = basepath
     if logpath is not None:
-        result.logpath = logpath
+        result.paths.log = logpath
     if 'auth_timeout' not in result:
         result.auth_timeout = 300
     if 'require_vouch' not in result:
@@ -424,42 +442,28 @@ def loadConfig(configFilename, host=None, port=None, basepath=None, logpath=None
 
     return result
 
-def getRedis(cfgRedis):
-    if 'host' not in cfgRedis:
-        cfgRedis.host = '127.0.0.1'
-    if 'port' not in cfgRedis:
-        cfgRedis.port = 6379
-    if 'db' not in cfgRedis:
-        cfgRedis.db = 0
-
-    return redis.StrictRedis(host=cfgRedis.host, port=cfgRedis.port, db=cfgRedis.db)
-
-# event = events.Events(config={ "handler_path": os.path.join(_ourPath, "handlers") })
-
-def buildTemplateContext(config):
-    result = {}
-    for key in ('baseurl', 'title', 'meta'):
-        if key in config.bearlog:
-            value = config.bearlog[key]
-        else:
-            value = ''
-        result[key] = value
-    return result
+def getRedis(config):
+    if 'host' not in config:
+        config.host = '127.0.0.1'
+    if 'port' not in config:
+        config.port = 6379
+    if 'db' not in config:
+        config.db = 0
+    return redis.StrictRedis(host=config.host, port=config.port, db=config.db)
 
 def doStart(app, configFile, ourHost=None, ourPort=None, ourBasePath=None, ourPath=None, echo=False):
     _cfg = loadConfig(configFile, host=ourHost, port=ourPort, basepath=ourBasePath, logpath=ourPath)
     _db  = None
     if 'secret' in _cfg:
         app.config['SECRET_KEY'] = _cfg.secret
-    initLogging(app.logger, _cfg.logpath, echo=echo)
+    initLogging(app.logger, _cfg.paths.log, echo=echo)
     if 'redis' in _cfg:
         _db = getRedis(_cfg.redis)
     return _cfg, _db
 
 if _uwsgi:
-    cfg, db      = doStart(app, _configFile, _ourPath)
-    events       = Events(cfg.handlerspath)
-    templateData = buildTemplateContext(cfg)
+    cfg, db = doStart(app, _configFile, _ourPath)
+    events  = Events(cfg.handlerspath)
 #
 # None of the below will be run for nginx + uwsgi
 #
@@ -473,9 +477,8 @@ if __name__ == '__main__':
     parser.add_argument('--basepath', default='/opt/kaku/')
     parser.add_argument('--config',   default='./kaku.cfg')
 
-    args         = parser.parse_args()
-    cfg, db      = doStart(app, args.config, args.host, args.port, args.basepath, args.logpath, echo=True)
-    events       = Events(cfg.handlerspath)
-    templateData = buildTemplateContext(cfg)
+    args    = parser.parse_args()
+    cfg, db = doStart(app, args.config, args.host, args.port, args.basepath, args.logpath, echo=True)
+    events  = Events(cfg.handlerspath)
 
     app.run(host=cfg.host, port=cfg.port, debug=True)

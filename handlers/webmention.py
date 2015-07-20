@@ -99,9 +99,9 @@ def processVouch(sourceURL, targetURL, vouchDomain):
                     with open(vouchFile, 'a+') as h:
                         h.write('\n%s' % vouchDomain)
 
-def processWebmention(sourceURL, targetURL, vouchDomain=None):
+def inbound(sourceURL, targetURL, vouchDomain=None, domainConfig):
     result = False
-    with open(os.path.join(cfg['logpath'], 'mentions.log'), 'a+') as h:
+    with open(os.path.join(domainConfig.logpath, 'mentions.log'), 'a+') as h:
         h.write('target=%s source=%s vouch=%s\n' % (targetURL, sourceURL, vouchDomain))
 
     r = requests.get(sourceURL, verify=False)
@@ -118,12 +118,12 @@ def processWebmention(sourceURL, targetURL, vouchDomain=None):
         else:
             mentionData['content'] = r.content
 
-        if vouchDomain is not None and cfg['require_vouch']:
+        if vouchDomain is not None and domainConfig.require_vouch:
             mentionData['vouched'] = processVouch(sourceURL, targetURL, vouchDomain)
             result                 = mentionData['vouched']
             log.info('result of vouch? %s' % result)
         else:
-            result = not cfg['require_vouch']
+            result = not domainConfig.require_vouch
             log.info('no vouch domain, result %s' % result)
 
         mf2Data = Parser(doc=mentionData['content']).to_dict()
@@ -138,7 +138,7 @@ def processWebmention(sourceURL, targetURL, vouchDomain=None):
         if db is not None:
             db.set('mention::%s' % safeID, sData)
 
-        targetFile = os.path.join(cfg.basepath, safeID)
+        targetFile = os.path.join(domainConfig.basepath, safeID)
         with open(targetFile, 'a+') as h:
             h.write(sData)
 

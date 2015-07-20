@@ -43,7 +43,7 @@ Summary: %(title)s
 %(content)s
 """
 
-def createArticle(data):
+def createArticle(data, domainConfig):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -57,8 +57,8 @@ def createArticle(data):
     doy      = published.strftime('%j')
     title    = data['title']
     slug     = createSlug(title)
-    location = os.path.join(cfg.baseurl, data['contentroute'], year, doy, slug)
-    basepath = os.path.join(cfg.contentpath, 'content', year, doy)
+    location = os.path.join(domainConfig.baseurl, domainConfig.contentroute, year, doy, slug)
+    basepath = os.path.join(domainConfig.contentpath, 'content', year, doy)
     task     = { 'action':'create',
                  'type':  'article',
                  'data':  { 'title':     title,
@@ -90,7 +90,7 @@ noteTemplate = """<span id="%(url)s"><p class="byline h-entry" role="note"> <a h
 %(marker)s
 """
 
-def createNote(data):
+def createNote(data, domainConfig):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -104,8 +104,8 @@ def createNote(data):
     doy      = published.strftime('%j')
     title    = data['content'].split('\n')[0]
     slug     = createSlug(title)
-    location = os.path.join(cfg.baseurl, data['contentroute'], year, doy, slug)
-    basepath = os.path.join(cfg.contentpath, 'content', year, doy)
+    location = os.path.join(domainConfig.baseurl, domainConfig.contentroute, year, doy, slug)
+    basepath = os.path.join(domainConfig.contentpath, 'content', year, doy)
     task     = { 'action':'create',
                  'type':  'article',
                  'data':  { 'title':     title,
@@ -133,7 +133,7 @@ def createNote(data):
 
     return location, code
 
-def processMicroPub(data):
+def process(data, domainConfig):
     if request.method == 'POST':
         if 'h' in data:
             action = data['h'].lower()
@@ -143,13 +143,11 @@ def processMicroPub(data):
             else:
                 location = None
                 code     = 400
-                data['contentroute'] = cfg[data['domain']]['contentroute']
-
                 if action == 'entry':
                     if 'title' in data and data['title'] is not None:
-                        location, code = createArticle(data)
+                        location, code = createArticle(data, domainConfig)
                     else:
-                        location, code = createNote(data)
+                        location, code = createNote(data, domainConfig)
 
                 if code in (202,):
                     return ('Micropub CREATE %s successful for %s' % (action, location), code, {'Location': location})

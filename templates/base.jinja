@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+
+  <meta name="description" content="the babbling of a coder and cat herder"/>
+  <meta name="author" content="bear"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+
+  <link rel="shortcut icon" href="/images/bear_128x128.jpg" sizes="128x128"/>
+  <link rel="apple-touch-icon" sizes="57x57" href="/images/bear_apple-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="/images/bear_apple-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="/images/bear_apple-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="/images/bear_apple-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="/images/bear_apple-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="/images/bear_apple-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="/images/bear_apple-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/images/bear_apple-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/bear_apple-icon-180x180.png">
+  <link rel="icon" type="image/png" sizes="192x192"  href="/images/bear_android-icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/bear_favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/images/bear_favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/bear_favicon-16x16.png">
+  <link rel="manifest" href="/images/bear_manifest.json">
+  <meta name="msapplication-TileColor" content="#ffffff">
+  <meta name="msapplication-TileImage" content="/images/bear_ms-icon-144x144.png">
+  <meta name="theme-color" content="#ffffff">
+
+  <link rel="webmention"             href="https://bear.im/webmention"/>
+  <link rel="micropub"               href="https://bear.im/micropub"/>
+  <link rel="token_endpoint"         href="https://bear.im/token"/>
+  <link rel="authorization_endpoint" href="https://indieauth.com/auth"/>
+
+  <link href="https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic|Open+Sans:400italic,600italic,400,600"
+        rel="stylesheet" type="text/css"/>
+  <link href="/css/bearlog.css"
+        rel="stylesheet" type="text/css"/>
+</head>
+<body>
+  <header class="page-header">
+    <div class="page-logo">
+      <a href="/bearlog" title="home"><img src="/images/bear_with_stein_180.png" alt="Bear with beer stein"/></a>
+    </div>
+    <div class="page-title">
+      <h1>Bear's Log</h1>
+      <h2>a journal writ one beer at a time</h2>
+      <nav>
+        <ul>
+          <li><a href="{{ baseurl }}archives.html">archives</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="page-content">
+{% block content %}{% endblock %}
+  </div>
+  <hr/>
+  <footer>
+    <div class="h-card">
+      <ul class="about">
+        <li><a href="/"><img class="u-photo" src="/images/bear_145x145.jpg" height="42" width="42"/></a></li>
+        <li>&copy; 2003-2015 by <a class="p-name u-url" href="/about">Mike Taylor</a></li>
+      </ul>
+      <ul class="license">
+        <li><a xmlns:cc="//creativecommons.org/ns#" 
+               property="cc:attributionName"
+               rel="cc:attributionURL"
+               href="//creativecommons.org/licenses/by-sa/3.0/us/">
+              <img src="//i.creativecommons.org/l/by-sa/3.0/us/88x31.png" 
+                   alt="Creative Commons Attribution-ShareAlike 3.0 United States"/>
+            </a></li>
+        <li>
+            <a rel="license" href="//creativecommons.org/licenses/by-sa/3.0/us/">
+              Creative Commons Attribution-ShareAlike 3.0 United States
+            </a>
+        </li>
+      </ul>
+    </div>
+  </footer>
+</body>
+</html>

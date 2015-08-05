@@ -1,0 +1,25 @@
+{% extends "base.jinja" %}
+{% block content %}        
+<h1>Micropub</h1>
+{% for message in get_flashed_messages() %}
+  <div class="flash">{{ message }}</div>
+{% endfor %}
+<form action="" method="post" name="micropub">
+    Action:    {{form.action(size=60)}}
+    Title:     {{form.title(size=60)}}
+    Published: {{form.published(size=60)}}
+    Content:   {{form.content(size=60)}}
+    {{form.hidden_tag()}}
+    <p><button type="submit">publish</button></p>
+</form>
+<p>
+  Client ID: {{client_id}}
+  App ID: {{app_id}}
+</p>
+{% if not authed %}
+<form action="https://bear.im/login">
+    <input name="from_uri" type="hidden" value="{{from_uri}}">
+    <input type="submit" value="Login">
+</form>
+{% endif %}
+{% endblock content %}

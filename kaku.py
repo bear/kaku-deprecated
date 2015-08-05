@@ -42,12 +42,11 @@ class LoginForm(Form):
     redirect_uri = HiddenField('redirect_uri')
     from_uri     = HiddenField('from_uri')
 
-class MicroPubForm(Form):
+class PubishForm(Form):
     h            = TextField('h', validators = [])
     content      = TextField('content', validators = [])
     title        = TextField('title', validators = [])
     published    = TextField('published', validators = [])
-    slug         = TextField('slug', validators = [])
     inreplyto    = TextField('in-reply-to', validators = [])
     syndicateto  = TextField('syndicate-to', validators = [])
 
@@ -66,8 +65,10 @@ class TokenForm(Form):
 # check for uwsgi, use PWD if present or getcwd() if not
 _uwsgi = __name__.startswith('uwsgi')
 if _uwsgi:
-    _ourPath    = os.getenv('PWD', None)
+    _ourPath    = os.path.dirname(__name__.replace('uwsgi_file_', '').replace('_', '/'))
     _configFile = '/etc/kaku.cfg'
+    if not os.path.exists('/etc/kaku.cfg'):
+        _configFile = os.path.join(_ourPath, 'kaku.cfg')
 else:
     _ourPath    = os.getcwd()
     _configFile = os.path.join(_ourPath, 'kaku.cfg')
@@ -163,7 +164,7 @@ def handleLogin():
     if form.validate_on_submit():
         app.logger.info('me [%s]' % form.me.data)
 
-        me            = 'https://%s' % baseDomain(form.me.data, includeScheme=False)
+        me            = 'https://%s/' % baseDomain(form.me.data, includeScheme=False)
         authEndpoints = ninka.indieauth.discoverAuthEndpoints(me)
 
         if 'authorization_endpoint' in authEndpoints:
@@ -193,7 +194,8 @@ def handleLogin():
                     db.hset(key, 'redirect_uri', form.redirect_uri.data)
                     db.hset(key, 'client_id',    form.client_id.data)
                     db.hset(key, 'scope',        'post')
-                    db.expire(key, cfg['auth_timeout']) # expire in N minutes unless successful
+                    db.expire(key, cfg.auth_timeout) # expire in N minutes unless successful
+                app.logger.info('redirecting to [%s]' % url)
                 return redirect(url)
         else:
             return 'insert fancy no auth endpoint found error message here', 403
@@ -298,6 +300,24 @@ def handleMicroPub():
             # add support for /micropub?q=syndicate-to
             return 'not implemented', 501
 
+# @app.route('/publish', methods=['GET',])
+# def handlePublish():
+#     app.logger.info('handlePublish [%s]' % request.method)
+#     form = MicroPubForm(h='',
+#                         content='',
+#                         title='',
+#                         published='',
+#                         inreplyto='',
+#                         syndicateto=''
+#                        )
+
+#     if form.validate_on_submit():
+
+#     buildTemplateContext(cfg, me)
+#     templateContext['title'] = 'Publish'
+#     templateContext['form']  = form
+#     return render_template('publish.jinja', **templateContext)
+
 @app.route('/token', methods=['POST', 'GET'])
 def handleToken():
     app.logger.info('handleToken [%s]' % request.method)
@@ -306,6 +326,8 @@ def handleToken():
         access_token = request.headers.get('Authorization')
         if access_token:
             access_token = access_token.replace('Bearer ', '')
+        else:
+            access_token 
         me, client_id, scope = checkAccessToken(access_token)
 
         if me is None or client_id is None:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
 """
 :copyright: (c) 2015 by Mike Taylor
 :license: MIT, see LICENSE for more details.

@@ -99,7 +99,7 @@ def processVouch(sourceURL, targetURL, vouchDomain):
                     with open(vouchFile, 'a+') as h:
                         h.write('\n%s' % vouchDomain)
 
-def inbound(sourceURL, targetURL, vouchDomain=None, domainConfig):
+def inbound(sourceURL, targetURL, vouchDomain=None, domainConfig=None):
     result = False
     with open(os.path.join(domainConfig.logpath, 'mentions.log'), 'a+') as h:
         h.write('target=%s source=%s vouch=%s\n' % (targetURL, sourceURL, vouchDomain))

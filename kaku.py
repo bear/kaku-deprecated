@@ -16,19 +16,18 @@ import urllib
 import logging
 import datetime
 
-# import pytz
+import pytz
 import redis
 import ninka
 import ronkyuu
 import requests
 
 from bearlib.config import Config
-from bearlib.events import Events
 from bearlib.tools import baseDomain
-from unidecode import unidecode
-# from mf2py.parser import Parser
+from mf2py.parser import Parser
 from dateutil.parser import parse
 from urlparse import urlparse, ParseResult
+from unidecode import unidecode
 
 from flask import Flask, request, redirect, render_template, session, flash
 from flask.ext.wtf import Form
@@ -65,6 +64,8 @@ class TokenForm(Form):
 # check for uwsgi, use PWD if present or getcwd() if not
 _uwsgi = __name__.startswith('uwsgi')
 if _uwsgi:
+    # TODO: need to find a better way - both / and . are replaced with _ for paths
+    #       which can generate bad paths with the simplistic replace i'm doing below
     _ourPath    = os.path.dirname(__name__.replace('uwsgi_file_', '').replace('_', '/'))
     _configFile = '/etc/kaku.cfg'
     if not os.path.exists('/etc/kaku.cfg'):
@@ -75,32 +76,17 @@ else:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'foo'  # replaced downstream
-cfg    = None
-db     = None
-events = None
-templateContext = {}
-templateCache   = {}
+cfg = None
+db  = None
 
-def getDomainConfig(domain=None):
-    result = None
-    if domain is not None:
-        if domain not in templateCache:
-            templateCache[domain] = Config()
-            templateCache[domain].fromJson(config[domain])
-        result = templateCache[domain]
-    if result is None:
-        result = Config()
-    return result
 
-def buildTemplateContext(config, domain):
-    templateContext = {}
-    domainConfig    = getDomainConfig(domain)
-    for key in ('baseurl', 'title', 'meta'):
-        if key in domainConfig:
-            value = domainConfig[key]
-        else:
-            value = ''
-        templateContext[key] = value
+# from http://flask.pocoo.org/snippets/5/
+_punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
+def createSlug(text, delim=u'-'):
+    result = []
+    for word in _punct_re.split(text.lower()):
+        result.extend(unidecode(word).split())
+    return unicode(delim.join(result))
 
 def clearAuth():
     if 'indieauth_token' in session:
@@ -136,6 +122,7 @@ def checkAccessToken(access_token):
             me        = data[1]
             client_id = data[2]
             scope     = data[3]
+            app.logger.info('access token valid [%s] [%s] [%s]' % (me, client_id, scope))
             return me, client_id, scope
     else:
         return None, None, None
@@ -268,6 +255,40 @@ def handleAuth():
         clearAuth()
         return 'invalid', 403
 
+def micropub(data):
+    if 'h' in data:
+        action = data['h'].lower()
+
+        if action not in ('entry',):
+            return ('Micropub CREATE requires a valid action parameter', 400, {})
+        else:
+            try:
+                utcdate   = datetime.datetime.utcnow()
+                tzLocal   = pytz.timezone('America/New_York')
+                timestamp = tzLocal.localize(utcdate, is_dst=None)
+
+                if 'content' in data and data['content'] is not None:
+                    title = data['content'].split('\n')[0]
+                else:
+                    title = 'event-%s' % timestamp.strftime('%H%M%S')
+                slug     = createSlug(title)
+                location = os.path.join(cfg.basepath, str(timestamp.year), timestamp.strftime('%j'), slug)
+                event    = { 'type':     'micropub',
+                             'slug':      slug,
+                             'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                             'location':  location,
+                             'payload':   data,
+                           }
+                if db is not None:
+                    db.rpush('kaku-events', json.dumps(event))
+                    return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
+            except Exception:
+                app.logger.exception('Exception during micropub handling')
+
+            return ('Micropub CREATE failed', 500, {})
+    else:
+        return ('Invalid Micropub CREATE request', 400, {})
+
 @app.route('/micropub', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
 def handleMicroPub():
     app.logger.info('handleMicroPub [%s]' % request.method)
@@ -277,25 +298,27 @@ def handleMicroPub():
     if access_token:
         access_token = access_token.replace('Bearer ', '')
     me, client_id, scope = checkAccessToken(access_token)
-
-    app.logger.info('micropub %s [%s] [%s, %s, %s]' % (request.method, access_token, me, client_id, scope))
-    app.logger.info(request.args)
-    app.logger.info(request.form)
+    app.logger.info('[%s] [%s] [%s] [%s]' % (access_token, me, client_id, scope))
 
     if me is None or client_id is None:
-        return ('Invalid access_token', 400, {})
+        return ('Access Token missing', 401, {})
     else:
         if request.method == 'POST':
                 domain = baseDomain(me, includeScheme=False)
-                if domain == 'bear.im':
+                if domain == cfg.our_domain and checkAccessToken(access_token):
                     data = { 'domain': domain }
-                    for key in ('h', 'name', 'summary', 'content', 'published', 'updated', 'category', 
-                                'slug', 'location', 'in-reply-to', 'repost-of', 'syndication', 'syndicate-to'):
+                    for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
+                                'category', 'slug', 'location',  'syndication', 'syndicate-to',
+                                'in-reply-to', 'repost-of', 'like-of'):
                         data[key] = request.form.get(key)
-                    events('micropub', 'setup', cfg, app.logger)
-                    return events('micropub', 'process', data, getDomainConfig(domain))
+                        app.logger.info('    %s = [%s]' % (key, data[key]))
+                    for key in request.form.keys():
+                        if key not in data:
+                            data[key] = request.form.get(key)
+                            app.logger.info('    %s = [%s]' % (key, data[key]))
+                    return micropub(data)
                 else:
-                    return 'unauthorized', 401
+                    return 'Unauthorized', 403
         elif request.method == 'GET':
             # add support for /micropub?q=syndicate-to
             return 'not implemented', 501
@@ -347,7 +370,17 @@ def handleToken():
         client_id    = request.form.get('client_id')
         state        = request.form.get('state')
 
-        r = ninka.indieauth.validateAuthCode(code=code, 
+        app.logger.info('    code         [%s]' % code)
+        app.logger.info('    me           [%s]' % me)
+        app.logger.info('    client_id    [%s]' % client_id)
+        app.logger.info('    state        [%s]' % state)
+        app.logger.info('    redirect_uri [%s]' % redirect_uri)
+
+        # r = ninka.indieauth.validateAuthCode(code=code, 
+        #                                      client_id=me,
+        #                                      state=state,
+        #                                      redirect_uri=redirect_uri)
+        r = validateAuthCode(code=code, 
                                              client_id=me,
                                              state=state,
                                              redirect_uri=redirect_uri)
@@ -362,7 +395,7 @@ def handleToken():
                 db.set(key, token)
                 db.set(token_key, key)
 
-            app.logger.info('[%s] [%s]' % (key, token))
+            app.logger.info('  token generated for [%s] : [%s]' % (key, token))
 
             params = { 'me': me,
                        'scope': scope,
@@ -370,16 +403,65 @@ def handleToken():
                      }
             return (urllib.urlencode(params), 200, {'Content-Type': 'application/x-www-form-urlencoded'})
 
-# def validURL(targetURL):
-#     """Validate the target URL exists by making a HEAD request for it
-#     """
-#     result = 404
-#     try:
-#         r = requests.head(targetURL)
-#         result = r.status_code
-#     except:
-#         result = 404
-#     return result
+def validURL(targetURL):
+    """Validate the target URL exists by making a HEAD request for it
+    """
+    result = 404
+    try:
+        r = requests.head(targetURL)
+        result = r.status_code
+    except:
+        result = 404
+    return result
+
+def extractHCard(mf2Data):
+    result = { 'name': '', 
+               'url':  '',
+             }
+    if 'items' in mf2Data:
+        for item in mf2Data['items']:
+            if 'type' in item and 'h-card' in item['type']:
+                result['name'] = item['properties']['name']
+                if 'url' in item['properties']:
+                    result['url'] = item['properties']['url']
+    return result
+
+def processVouch(sourceURL, targetURL, vouchDomain):
+    """Determine if a vouch domain is valid.
+
+    This implements a very simple method for determining if a vouch should
+    be considered valid:
+    1. does the vouch domain have it's own webmention endpoint
+    2. does the vouch domain have an indieauth endpoint
+    3. does the domain exist in the list of domains i've linked to
+
+    yep, super simple but enough for me to test implement vouches
+    """
+    vouchDomains = []
+    vouchFile    = os.path.join(cfg.basepath, 'vouch_domains.txt')
+    if os.isfile(vouchFile):
+        with open(vouchFile, 'r') as h:
+            for domain in h.readlines():
+                vouchDomains.append(domain.strip().lower())
+
+    # result = ronkyuu.vouch(sourceURL, targetURL, vouchDomain, vouchDomains)
+
+    if vouchDomain.lower() in vouchDomains:
+        result = True
+    else:
+        wmStatus, wmUrl = ronkyuu.discoverEndpoint(vouchDomain, test_urls=False)
+        if wmUrl is not None and wmStatus == 200:
+            authEndpoints = ninka.indieauth.discoverAuthEndpoints(vouchDomain)
+
+            if 'authorization_endpoint' in authEndpoints:
+                authURL = None
+                for url in authEndpoints['authorization_endpoint']:
+                    authURL = url
+                    break
+                if authURL is not None:
+                    result = True
+                    with open(vouchFile, 'a+') as h:
+                        h.write('\n%s' % vouchDomain)
 
 def mention(sourceURL, targetURL, vouchDomain=None):
     """Process the Webmention of the targetURL from the sourceURL.
@@ -395,9 +477,18 @@ def mention(sourceURL, targetURL, vouchDomain=None):
     for href in mentions['refs']:
         if href != sourceURL and href == targetURL:
             app.logger.info('post at %s was referenced by %s' % (targetURL, sourceURL))
-            events('webmention', 'setup', cfg, app.logger)
-            domain = baseDomain(targetURL, includeScheme=False)
-            result = events('webmention', 'inbound', sourceURL, targetURL, vouchDomain, getDomainConfig(domain))
+            utcdate   = datetime.datetime.utcnow()
+            tzLocal   = pytz.timezone('America/New_York')
+            timestamp = tzLocal.localize(utcdate, is_dst=None)
+            event     = { 'type':      'webmention',
+                          'sourceURL': sourceURL,
+                          'targetURL': targetURL,
+                          'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                          'payload':   {},
+                        }
+            if db is not None:
+                db.rpush('kaku-events', json.dumps(event))
+                result = True
     app.logger.info('mention() returning %s' % result)
     return result
 
@@ -411,9 +502,8 @@ def handleWebmention():
         vouch  = request.form.get('vouch')
         app.logger.info('source: %s target: %s vouch %s' % (source, target, vouch))
 
-        if '/bearlog' in target:
+        if cfg.basepath in target:
             valid = validURL(target)
-
             app.logger.info('valid? %s' % valid)
 
             if valid == requests.codes.ok:
@@ -462,6 +552,8 @@ def loadConfig(configFilename, host=None, port=None, logpath=None):
         result.auth_timeout = 300
     if 'require_vouch' not in result:
         result.require_vouch = False
+    if 'our_domain' not in result:
+        result.our_domain = baseDomain(result.client_id, includeScheme=False)
 
     return result
 
@@ -482,11 +574,11 @@ def doStart(app, configFile, ourHost=None, ourPort=None, ourPath=None, echo=Fals
     initLogging(app.logger, _cfg.paths.log, echo=echo)
     if 'redis' in _cfg:
         _db = getRedis(_cfg.redis)
-    events = Events(_cfg.paths.handlers)
+    app.logger.info('configuration loaded from %s' % configFile)
     return _cfg, _db
 
 if _uwsgi:
-    cfg, db = doStart(app, _configFile, _ourPath)
+    cfg, db = doStart(app, _configFile)
 #
 # None of the below will be run for nginx + uwsgi
 #
@@ -499,7 +591,7 @@ if __name__ == '__main__':
     parser.add_argument('--logpath',  default='.')
     parser.add_argument('--config',   default='./kaku.cfg')
 
-    args    = parser.parse_args()
+    args = parser.parse_args()
     cfg, db = doStart(app, args.config, args.host, args.port, args.logpath, echo=True)
 
     app.run(host=cfg.host, port=cfg.port, debug=True)

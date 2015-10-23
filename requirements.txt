@@ -1,5 +1,5 @@
 bearlib>=0.9
-ninka>=0.1.4
+ninka>=0.3
 ronkyuu>=0.3
 pytz>=2015.4
 requests>=2.7.0

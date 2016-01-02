@@ -207,16 +207,21 @@ def handleLoginSuccess():
         key  = 'login-%s' % me
         data = db.hgetall(key)
         if data:
-            r = ninka.indieauth.validateAuthCode(code=code,
-                                                 client_id=me,
-                                                 redirect_uri=data['redirect_uri'])
+            app.logger.info('calling [%s] to validate code' % data['auth_url'])
+            r = ninka.indieauth.validateAuthCode(code=code, 
+                                                 client_id=data['client_id'],
+                                                 redirect_uri=data['redirect_uri'],
+                                                 validationEndpoint=data['auth_url'])
             if r['status'] == requests.codes.ok:
                 app.logger.info('login code verified')
-                scope    = r['response']['scope']
+                if 'scope' in r['response']:
+                    scope = r['response']['scope']
+                else:
+                    scope = data['scope']
                 from_uri = data['from_uri']
                 token    = str(uuid.uuid4())
 
-                db.hset(key, 'code', code)
+                db.hset(key, 'code',  code)
                 db.hset(key, 'token', token)
                 db.expire(key, cfg['auth_timeout'])
                 db.set('token-%s' % token, key)
@@ -295,24 +300,6 @@ def handleMicroPub():
             # add support for /micropub?q=syndicate-to
             return 'not implemented', 501
 
-# @app.route('/publish', methods=['GET',])
-# def handlePublish():
-#     app.logger.info('handlePublish [%s]' % request.method)
-#     form = MicroPubForm(h='',
-#                         content='',
-#                         title='',
-#                         published='',
-#                         inreplyto='',
-#                         syndicateto=''
-#                        )
-
-#     if form.validate_on_submit():
-
-#     buildTemplateContext(cfg, me)
-#     templateContext['title'] = 'Publish'
-#     templateContext['form']  = form
-#     return render_template('publish.jinja', **templateContext)
-
 @app.route('/token', methods=['POST', 'GET'])
 def handleToken():
     app.logger.info('handleToken [%s]' % request.method)
@@ -374,6 +361,24 @@ def handleToken():
                        'access_token': token
                      }
             return (urllib.urlencode(params), 200, {'Content-Type': 'application/x-www-form-urlencoded'})
+
+# @app.route('/publish', methods=['GET',])
+# def handlePublish():
+#     app.logger.info('handlePublish [%s]' % request.method)
+#     form = MicroPubForm(h='',
+#                         content='',
+#                         title='',
+#                         published='',
+#                         inreplyto='',
+#                         syndicateto=''
+#                        )
+
+#     if form.validate_on_submit():
+
+#     buildTemplateContext(cfg, me)
+#     templateContext['title'] = 'Publish'
+#     templateContext['form']  = form
+#     return render_template('publish.jinja', **templateContext)
 
 def validURL(targetURL):
     """Validate the target URL exists by making a HEAD request for it

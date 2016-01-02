@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-import os, sys
+import os
 import re
+import json
+import pytz
 import datetime
 import traceback
 
-import pytz
 from bearlib.config import Config
-from bearlib.tools import normalizeFilename
+from dateutil.parser import parse
 from unidecode import unidecode
 
 
@@ -52,7 +53,7 @@ def createPath(path):
     try:
         print path
         os.makedirs(path)
-    except OSError as exc: # Python >2.5
+    except OSError as exc:  # Python >2.5
         print exc
         if os.path.isdir(path):
             pass
@@ -83,7 +84,7 @@ def createBookmark(data, domainCfg, db):
     task      = { 'action':    'create',
                   'type':      'bookmark',
                   'slug':      slug,
-                  'url':       data['like-of']
+                  'url':       data['like-of'],
                   'category':  data['category'],
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
@@ -100,6 +101,10 @@ def createArticle(data, domainCfg, db):
         d = parse(data['published'])
     else:
         d = datetime.datetime.utcnow()
+    if 'title' in data:
+        title = data['title']
+    else:
+        title = data['content'].split('\n')[0],
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = createSlug(title)
@@ -107,7 +112,7 @@ def createArticle(data, domainCfg, db):
     task      = { 'action':    'create',
                   'type':      'article',
                   'slug':      slug,
-                  'title':     data['content'].split('\n')[0],
+                  'title':     title,
                   'content':   data['content'],
                   'category':  data['category'],
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
@@ -125,16 +130,20 @@ def createNote(data, domainCfg, db):
         d = parse(data['published'])
     else:
         d = datetime.datetime.utcnow()
+    if 'title' in data:
+        title = data['title']
+    else:
+        title = data['content'].split('\n')[0],
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = createSlug(title)
     location  = os.path.join(domainCfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
-    task      = { 'action':   'create',
-                  'type':     'note',
-                  'slug':     slug,
-                  'title':    data['content'].split('\n')[0],
-                  'content':  data['content'],
-                  'category': data['category'],
+    task      = { 'action':    'create',
+                  'type':      'note',
+                  'slug':      slug,
+                  'title':     title,
+                  'content':   data['content'],
+                  'category':  data['category'],
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
@@ -145,7 +154,7 @@ def createNote(data, domainCfg, db):
         code = 500
     return location, code
 
-def process(data, db):
+def process(method, data, db):
     try:
         if method == 'POST':
             if 'h' in data:
@@ -176,7 +185,7 @@ def process(data, db):
             return ('Unable to process Micropub %s' % method, 400, {})
     except:
         pass
-    
+
     # should only get here if an exception has occurred
     traceback.print_exc()
     return ('Unable to process Micropub %s' % method, 400, {})

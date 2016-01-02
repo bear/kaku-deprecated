@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
-import os, sys
+import os
+import json
 import datetime
 
-from urlparse import urlparse, ParseResult
-from mf2py.parser import Parser
+from urlparse import urlparse
 from bearlib.config import Config
 
+import ninka
 import ronkyuu
 
 
@@ -45,7 +46,7 @@ def buildTemplateContext(config, domainCfg):
     return result
 
 def extractHCard(mf2Data):
-    result = { 'name': '', 
+    result = { 'name': '',
                'url':  '',
              }
     if 'items' in mf2Data:
@@ -61,7 +62,7 @@ def generateSafeName(sourceURL):
     result  = '%s_%s.mention' % (urlData.netloc, urlData.path.replace('/', '_'))
     return result
 
-def generateMentionName(targetURL, vouched):
+def generateMentionName(cfg, targetURL, vouched):
     urlData     = urlparse(targetURL)
     urlPaths    = urlData.path.split('/')
     basePath    = '/'.join(urlPaths[2:-1])
@@ -84,7 +85,7 @@ def generateMentionName(targetURL, vouched):
                 nMax = n
     return os.path.join(mentionPath, '%s.%03d%s' % (mentionSlug, nMax + 1, mentionExt))
 
-def processVouch(sourceURL, targetURL, vouchDomain):
+def processVouch(cfg, sourceURL, targetURL, vouchDomain):
     """Determine if a vouch domain is valid.
 
     This implements a very simple method for determining if a vouch should
@@ -95,8 +96,9 @@ def processVouch(sourceURL, targetURL, vouchDomain):
 
     yep, super simple but enough for me to test implement vouches
     """
+    result       = False
     vouchDomains = []
-    vouchFile    = os.path.join(cfg['basepath'], 'vouch_domains.txt')
+    vouchFile    = os.path.join(cfg.basepath, 'vouch_domains.txt')
     if os.isfile(vouchFile):
         with open(vouchFile, 'r') as h:
             for domain in h.readlines():
@@ -120,6 +122,7 @@ def processVouch(sourceURL, targetURL, vouchDomain):
                     result = True
                     with open(vouchFile, 'a+') as h:
                         h.write('\n%s' % vouchDomain)
+    return result
 
 def inbound(domain, sourceURL, targetURL, vouchDomain=None, db=None):
     result = False
@@ -136,9 +139,8 @@ def inbound(domain, sourceURL, targetURL, vouchDomain=None, db=None):
                         'postDate':    datetime.date.today().strftime('%Y-%m-%dT%H:%M:%S')
                       }
         if vouchDomain is not None and domainCfg.require_vouch:
-            mentionData['vouched'] = processVouch(sourceURL, targetURL, vouchDomain)
+            mentionData['vouched'] = processVouch(domainCfg, sourceURL, targetURL, vouchDomain)
             result                 = mentionData['vouched']
-            log.info('result of vouch? %s' % result)
         else:
             result = True
 

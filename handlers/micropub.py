@@ -154,38 +154,44 @@ def createNote(data, domainCfg, db):
         code = 500
     return location, code
 
-def process(method, data, db):
+def micropub(data, db, log):
     try:
-        if method == 'POST':
+        if data['event'] == 'create':
             if 'h' in data:
-                action = data['h'].lower()
-
-                if action not in ('entry',):
+                if data['h'].lower() not in ('entry',):
                     return ('Micropub CREATE requires a valid action parameter', 400, {})
                 else:
-                    location = None
-                    code     = 400
-                    if action == 'entry':
-                        domainCfg = getDomainConfig(data['domain'])
-                        if domainCfg is not None:
-                            if 'like-of' in data:
-                                location, code = createBookmark(data, domainCfg, db)
-                            elif 'title' in data and data['title'] is not None:
-                                location, code = createArticle(data, domainCfg, db)
-                            else:
-                                location, code = createNote(data, domainCfg, db)
+                    try:
+                        utcdate   = datetime.datetime.utcnow()
+                        tzLocal   = pytz.timezone('America/New_York')
+                        timestamp = tzLocal.localize(utcdate, is_dst=None)
 
-                    if code in (202,):
-                        return ('Micropub CREATE %s successful for %s' % (action, location), code, {'Location': location})
-                    else:
-                        return ('Micropub CREATE %s failed for %s' % (action, location), code, {})
+                        if 'content' in data and data['content'] is not None:
+                            title = data['content'].split('\n')[0]
+                        else:
+                            title = 'event-%s' % timestamp.strftime('%H%M%S')
+                        slug     = createSlug(title)
+                        location = os.path.join(data['basepath'], str(timestamp.year), timestamp.strftime('%j'), slug)
+                        event    = { 'type':     'micropub',
+                                     'slug':      slug,
+                                     'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                                     'location':  '%s%s' % (data['baseurl'], location),
+                                     'payload':   data,
+                                   }
+                        if db is not None:
+                            db.rpush('kaku-events', json.dumps(event))
+                            return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
+                    except Exception:
+                        log.exception('Exception during micropub handling')
+
+                    return ('Micropub CREATE failed', 500, {})
             else:
-                return ('Micropub CREATE requires an action parameter', 400, {})
+                return ('Invalid Micropub CREATE request', 400, {})
         else:
-            return ('Unable to process Micropub %s' % method, 400, {})
+            return ('Unable to process Micropub %s' % data['event'], 400, {})
     except:
         pass
 
     # should only get here if an exception has occurred
     traceback.print_exc()
-    return ('Unable to process Micropub %s' % method, 400, {})
+    return ('Unable to process Micropub', 400, {})

@@ -9,17 +9,14 @@ events that IndieWeb Micropub requires.
 """
 
 import os
+import sys
 import re
-import json
 import uuid
 import urllib
 import logging
-import datetime
 
-import pytz
 import redis
 import ninka
-import ronkyuu
 import requests
 
 from logging.handlers import RotatingFileHandler
@@ -70,9 +67,14 @@ if _uwsgi:
     _configFile = '/etc/kaku.cfg'
     if not os.path.exists('/etc/kaku.cfg'):
         _configFile = os.path.join(_ourPath, 'kaku.cfg')
+    sys.path.append(_ourPath)
 else:
     _ourPath    = os.getcwd()
     _configFile = os.path.join(_ourPath, 'kaku.cfg')
+
+# these are done here instead of at top to allow the path to be inserted above
+from handlers.webmention import mention
+from handlers.micropub import micropub
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'foo'  # replaced downstream
@@ -255,40 +257,6 @@ def handleAuth():
         clearAuth()
         return 'invalid', 403
 
-def micropub(data):
-    if 'h' in data:
-        action = data['h'].lower()
-
-        if action not in ('entry',):
-            return ('Micropub CREATE requires a valid action parameter', 400, {})
-        else:
-            try:
-                utcdate   = datetime.datetime.utcnow()
-                tzLocal   = pytz.timezone('America/New_York')
-                timestamp = tzLocal.localize(utcdate, is_dst=None)
-
-                if 'content' in data and data['content'] is not None:
-                    title = data['content'].split('\n')[0]
-                else:
-                    title = 'event-%s' % timestamp.strftime('%H%M%S')
-                slug     = createSlug(title)
-                location = os.path.join(cfg.basepath, str(timestamp.year), timestamp.strftime('%j'), slug)
-                event    = { 'type':     'micropub',
-                             'slug':      slug,
-                             'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                             'location':  location,
-                             'payload':   data,
-                           }
-                if db is not None:
-                    db.rpush('kaku-events', json.dumps(event))
-                    return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
-            except Exception:
-                app.logger.exception('Exception during micropub handling')
-
-            return ('Micropub CREATE failed', 500, {})
-    else:
-        return ('Invalid Micropub CREATE request', 400, {})
-
 @app.route('/micropub', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
 def handleMicroPub():
     app.logger.info('handleMicroPub [%s]' % request.method)
@@ -306,7 +274,11 @@ def handleMicroPub():
         if request.method == 'POST':
                 domain = baseDomain(me, includeScheme=False)
                 if domain == cfg.our_domain and checkAccessToken(access_token):
-                    data = { 'domain': domain }
+                    data = { 'domain': domain,
+                             'baseurl': cfg.baseurl,
+                             'basepath': cfg.basepath,
+                             'event':  'create'
+                           }
                     for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
                                 'category', 'slug', 'location', 'syndication', 'syndicate-to',
                                 'in-reply-to', 'repost-of', 'like-of'):
@@ -316,7 +288,7 @@ def handleMicroPub():
                         if key not in data:
                             data[key] = request.form.get(key)
                             app.logger.info('    %s = [%s]' % (key, data[key]))
-                    return micropub(data)
+                    return micropub(data, db, app.logger)
                 else:
                     return 'Unauthorized', 403
         elif request.method == 'GET':
@@ -414,86 +386,6 @@ def validURL(targetURL):
         result = 404
     return result
 
-def extractHCard(mf2Data):
-    result = { 'name': '',
-               'url':  '',
-             }
-    if 'items' in mf2Data:
-        for item in mf2Data['items']:
-            if 'type' in item and 'h-card' in item['type']:
-                result['name'] = item['properties']['name']
-                if 'url' in item['properties']:
-                    result['url'] = item['properties']['url']
-    return result
-
-def processVouch(sourceURL, targetURL, vouchDomain):
-    """Determine if a vouch domain is valid.
-
-    This implements a very simple method for determining if a vouch should
-    be considered valid:
-    1. does the vouch domain have it's own webmention endpoint
-    2. does the vouch domain have an indieauth endpoint
-    3. does the domain exist in the list of domains i've linked to
-
-    yep, super simple but enough for me to test implement vouches
-    """
-    result = False
-    vouchDomains = []
-    vouchFile    = os.path.join(cfg.basepath, 'vouch_domains.txt')
-    if os.isfile(vouchFile):
-        with open(vouchFile, 'r') as h:
-            for domain in h.readlines():
-                vouchDomains.append(domain.strip().lower())
-
-    # result = ronkyuu.vouch(sourceURL, targetURL, vouchDomain, vouchDomains)
-
-    if vouchDomain.lower() in vouchDomains:
-        result = True
-    else:
-        wmStatus, wmUrl = ronkyuu.discoverEndpoint(vouchDomain, test_urls=False)
-        if wmUrl is not None and wmStatus == 200:
-            authEndpoints = ninka.indieauth.discoverAuthEndpoints(vouchDomain)
-
-            if 'authorization_endpoint' in authEndpoints:
-                authURL = None
-                for url in authEndpoints['authorization_endpoint']:
-                    authURL = url
-                    break
-                if authURL is not None:
-                    result = True
-                    with open(vouchFile, 'a+') as h:
-                        h.write('\n%s' % vouchDomain)
-    return result
-
-def mention(sourceURL, targetURL, vouchDomain=None):
-    """Process the Webmention of the targetURL from the sourceURL.
-
-    To verify that the sourceURL has indeed referenced our targetURL
-    we run findMentions() at it and scan the resulting href list.
-    """
-    app.logger.info('discovering Webmention endpoint for %s' % sourceURL)
-
-    mentions = ronkyuu.findMentions(sourceURL)
-    result   = False
-    app.logger.info('mentions %s' % mentions)
-    for href in mentions['refs']:
-        if href != sourceURL and href == targetURL:
-            app.logger.info('post at %s was referenced by %s' % (targetURL, sourceURL))
-            utcdate   = datetime.datetime.utcnow()
-            tzLocal   = pytz.timezone('America/New_York')
-            timestamp = tzLocal.localize(utcdate, is_dst=None)
-            event     = { 'type':      'webmention',
-                          'sourceURL': sourceURL,
-                          'targetURL': targetURL,
-                          'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                          'payload':   {},
-                        }
-            if db is not None:
-                db.rpush('kaku-events', json.dumps(event))
-                result = True
-    app.logger.info('mention() returning %s' % result)
-    return result
-
 @app.route('/webmention', methods=['POST'])
 def handleWebmention():
     app.logger.info('handleWebmention [%s]' % request.method)
@@ -509,10 +401,11 @@ def handleWebmention():
             app.logger.info('valid? %s' % valid)
 
             if valid == requests.codes.ok:
-                if mention(source, target, vouch):
+                valid, vouched = mention(source, target, _ourPath, db, vouch, cfg.require_vouch, app.logger)
+                if valid:
                     return redirect(target)
                 else:
-                    if vouch is None and cfg.require_vouch:
+                    if cfg.require_vouch and not vouched:
                         return 'Vouch required for webmention', 449
                     else:
                         return 'Webmention is invalid', 400
@@ -525,7 +418,7 @@ def initLogging(logger, logpath=None, echo=False):
     logFormatter = logging.Formatter("%(asctime)s %(levelname)-9s %(message)s", "%Y-%m-%d %H:%M:%S")
 
     if logpath is not None:
-        logfilename = os.path.join(logpath, 'indieweb.log')
+        logfilename = os.path.join(logpath, 'kaku.log')
         logHandler  = RotatingFileHandler(logfilename, maxBytes=1024 * 1024 * 100, backupCount=7)
         logHandler.setFormatter(logFormatter)
         logger.addHandler(logHandler)

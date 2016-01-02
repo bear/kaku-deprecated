@@ -5,45 +5,12 @@ import json
 import datetime
 
 from urlparse import urlparse
-from bearlib.config import Config
+from mf2py.parser import Parser
 
+import pytz
 import ninka
 import ronkyuu
 
-
-_ourPath = os.path.dirname(__file__)
-
-def setup(config, logger):
-    pass
-
-_mention = """date: %(postDate)s
-url: %(sourceURL)s
-
-[%(sourceURL)s](%(sourceURL)s)
-"""
-
-#
-# this handler expects a config file to be found in the same directory
-# where it is located that points to the domain's configuration
-# e.g. ./<domain>.cfg
-#
-def getDomainConfig(domain=None):
-    result  = None
-    cfgfile = os.path.join(_ourPath, '%s.cfg' % domain)
-    if domain is not None and os.path.exists(cfgfile):
-        result = Config()
-        result.fromJson(cfgfile)
-    return result
-
-def buildTemplateContext(config, domainCfg):
-    result = {}
-    for key in ('baseurl', 'title', 'meta'):
-        if key in domainCfg:
-            value = domainCfg[key]
-        else:
-            value = ''
-        result[key] = value
-    return result
 
 def extractHCard(mf2Data):
     result = { 'name': '',
@@ -85,7 +52,7 @@ def generateMentionName(cfg, targetURL, vouched):
                 nMax = n
     return os.path.join(mentionPath, '%s.%03d%s' % (mentionSlug, nMax + 1, mentionExt))
 
-def processVouch(cfg, sourceURL, targetURL, vouchDomain):
+def processVouch(dataPath, sourceURL, targetURL, vouchDomain):
     """Determine if a vouch domain is valid.
 
     This implements a very simple method for determining if a vouch should
@@ -98,7 +65,7 @@ def processVouch(cfg, sourceURL, targetURL, vouchDomain):
     """
     result       = False
     vouchDomains = []
-    vouchFile    = os.path.join(cfg.basepath, 'vouch_domains.txt')
+    vouchFile    = os.path.join(dataPath, 'vouch_domains.txt')
     if os.isfile(vouchFile):
         with open(vouchFile, 'r') as h:
             for domain in h.readlines():
@@ -124,47 +91,75 @@ def processVouch(cfg, sourceURL, targetURL, vouchDomain):
                         h.write('\n%s' % vouchDomain)
     return result
 
-def inbound(domain, sourceURL, targetURL, vouchDomain=None, db=None):
-    result = False
-    with open(os.path.join(_ourPath, 'mentions.log'), 'a+') as h:
+def mention(sourceURL, targetURL, dataPath, db, vouchDomain=None, vouchRequired=False, log=None):
+    """Process the Webmention of the targetURL from the sourceURL.
+
+    To verify that the sourceURL has indeed referenced our targetURL
+    we run findMentions() at it and scan the resulting href list.
+    """
+    log.info('discovering Webmention endpoint for %s' % sourceURL)
+
+    mentions = ronkyuu.findMentions(sourceURL)
+    result   = False
+    vouched  = False
+    log.info('mentions %s' % mentions)
+    with open(os.path.join(dataPath, 'mentions.log'), 'a+') as h:
         h.write('target=%s source=%s vouch=%s\n' % (targetURL, sourceURL, vouchDomain))
+    for href in mentions['refs']:
+        if href != sourceURL and href == targetURL:
+            log.info('post at %s was referenced by %s' % (targetURL, sourceURL))
+            utcdate   = datetime.datetime.utcnow()
+            tzLocal   = pytz.timezone('America/New_York')
+            timestamp = tzLocal.localize(utcdate, is_dst=None)
 
-    domainCfg = getDomainConfig(domain)
-    if domainCfg is not None:
-        mentionData = { 'sourceURL':   sourceURL,
-                        'targetURL':   targetURL,
-                        'vouchDomain': vouchDomain,
-                        'vouched':     False,
-                        'received':    datetime.date.today().strftime('%d %b %Y %H:%M'),
-                        'postDate':    datetime.date.today().strftime('%Y-%m-%dT%H:%M:%S')
-                      }
-        if vouchDomain is not None and domainCfg.require_vouch:
-            mentionData['vouched'] = processVouch(domainCfg, sourceURL, targetURL, vouchDomain)
-            result                 = mentionData['vouched']
-        else:
-            result = True
+            if vouchRequired:
+                if vouchDomain is None:
+                    vouched = False
+                    result  = False
+                else:
+                    vouched = processVouch(dataPath, sourceURL, targetURL, vouchDomain)
+                    result  = vouched
+            else:
+                vouched = False
+                result  = True
 
-        if result:
-            # mf2Data = Parser(doc=mentionData['content']).to_dict()
-            # hcard   = extractHCard(mf2Data)
+            if result:
+                mf2Data = Parser(doc=mentions['content']).to_dict()
+                hcard   = extractHCard(mf2Data)
+                event   = { 'type':        'webmention',
+                            'sourceURL':   sourceURL,
+                            'targetURL':   targetURL,
+                            'vouchDomain': vouchDomain,
+                            'vouched':     vouched,
+                            'received':    timestamp.strftime('%d %b %Y %H:%M'),
+                            'postDate':    timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
+                            'payload':     {
+                                'hcard': hcard,
+                                'mf2data': mf2Data,
+                            },
+                          }
 
-            # mentionData['hcardName'] = hcard['name']
-            # mentionData['hcardURL']  = hcard['url']
-            # mentionData['mf2data']   = mf2Data
-            # sData  = json.dumps(mentionData)
-            # safeID = generateSafeName(sourceURL)
-            # if db is not None:
-            #     db.set('mention::%s' % safeID, sData)
+                # mentionData['hcardName'] = hcard['name']
+                # mentionData['hcardURL']  = hcard['url']
+                # mentionData['mf2data']   = mf2Data
+                # sData  = json.dumps(mentionData)
+                # safeID = generateSafeName(sourceURL)
+                # if db is not None:
+                #     db.set('mention::%s' % safeID, sData)
 
-            # targetFile = os.path.join(domainCfg.basepath, safeID)
-            # with open(targetFile, 'a+') as h:
-            #     h.write(sData)
+                # targetFile = os.path.join(domainCfg.basepath, safeID)
+                # with open(targetFile, 'a+') as h:
+                #     h.write(sData)
 
-            # mentionFile = generateMentionName(targetURL, result)
-            # with open(mentionFile, 'w') as h:
-            #     h.write(_mention % mentionData)
+                # mentionFile = generateMentionName(targetURL, result)
+                # with open(mentionFile, 'w') as h:
+                #     h.write(_mention % mentionData)
 
-            if db is not None:
-               db.rpush('webmentions', json.dumps(mentionData))
+                if db is not None:
+                    db.rpush('kaku-events', json.dumps(event))
+                    result = True
+                else:
+                    result = False
 
-    return result
+    log.info('mention() returning %s' % result)
+    return result, vouched

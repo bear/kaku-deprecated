@@ -179,6 +179,7 @@ def handleLogin():
                     if data and 'token' in data:  # clear any existing auth data
                         db.delete('token-%s' % data['token'])
                         db.hdel(key, 'token')
+                    db.hset(key, 'auth_url',     ParseResult(authURL.scheme, authURL.netloc, authURL.path, '', '', '').geturl())
                     db.hset(key, 'from_uri',     form.from_uri.data)
                     db.hset(key, 'redirect_uri', form.redirect_uri.data)
                     db.hset(key, 'client_id',    form.client_id.data)

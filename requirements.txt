@@ -9,8 +9,8 @@ six>=1.10.0
 beautifulsoup4>=4.4.1
 html5lib>=0.9999999
 MarkupSafe>=0.23
-mf2py>=0.2.6
+mf2py>=1.0.1
 python-dateutil>=2.4.2
 Flask>=0.10.1
 Flask-WTF>=0.12
-Jinja2==2.8
+Jinja2>=2.8

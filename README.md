@@ -1,4 +1,6 @@
-# kaku
+[![Downloads](https://img.shields.io/pypi/v/kaku.svg)](https://pypi.python.org/pypi/kaku/)
+[![Requirements Status](https://requires.io/github/bear/python-twitter/requirements.svg?branch=master)](https://requires.io/github/bear/python-twitter/requirements/?branch=master)
+
 書く- to write
 
 This is the code I have used to enable a IndieWeb Micropub endpoint for my static site.

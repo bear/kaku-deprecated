@@ -209,7 +209,7 @@ def handleLoginSuccess():
         data = db.hgetall(key)
         if data:
             app.logger.info('calling [%s] to validate code' % data['auth_url'])
-            r = ninka.indieauth.validateAuthCode(code=code, 
+            r = ninka.indieauth.validateAuthCode(code=code,
                                                  client_id=data['client_id'],
                                                  redirect_uri=data['redirect_uri'],
                                                  validationEndpoint=data['auth_url'])

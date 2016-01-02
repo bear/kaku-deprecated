@@ -8,7 +8,7 @@ A Flask service to handle inbound HTML
 events that IndieWeb Micropub requires.
 """
 
-import os, sys
+import os
 import re
 import json
 import uuid
@@ -24,41 +24,39 @@ import requests
 
 from bearlib.config import Config
 from bearlib.tools import baseDomain
-from mf2py.parser import Parser
-from dateutil.parser import parse
-from urlparse import urlparse, ParseResult
+from urlparse import ParseResult
 from unidecode import unidecode
 
-from flask import Flask, request, redirect, render_template, session, flash
+from flask import Flask, request, redirect, render_template, session
 from flask.ext.wtf import Form
-from wtforms import TextField, HiddenField, BooleanField
+from wtforms import TextField, HiddenField
 from wtforms.validators import Required
 
 
 class LoginForm(Form):
-    me           = TextField('me', validators = [ Required() ])
+    me           = TextField('me', validators=[ Required() ])
     client_id    = HiddenField('client_id')
     redirect_uri = HiddenField('redirect_uri')
     from_uri     = HiddenField('from_uri')
 
 class PubishForm(Form):
-    h            = TextField('h', validators = [])
-    content      = TextField('content', validators = [])
-    title        = TextField('title', validators = [])
-    published    = TextField('published', validators = [])
-    inreplyto    = TextField('in-reply-to', validators = [])
-    syndicateto  = TextField('syndicate-to', validators = [])
+    h            = TextField('h', validators=[])
+    content      = TextField('content', validators=[])
+    title        = TextField('title', validators=[])
+    published    = TextField('published', validators=[])
+    inreplyto    = TextField('in-reply-to', validators=[])
+    syndicateto  = TextField('syndicate-to', validators=[])
 
 class TokenForm(Form):
     # app_id     = TextField('app_id', validators = [ Required() ])
     # invalidate = BooleanField('invalidate')
     # app_token  = TextField('app_token')
     # client_id  = HiddenField('client_id')
-    code         = TextField('code', validators = [])
-    me           = TextField('me', validators = [])
-    redirect_uri = TextField('redirect_uri', validators = [])
-    client_id    = TextField('client_id', validators = [])
-    state        = TextField('state', validators = [])
+    code         = TextField('code', validators=[])
+    me           = TextField('me', validators=[])
+    redirect_uri = TextField('redirect_uri', validators=[])
+    client_id    = TextField('client_id', validators=[])
+    state        = TextField('state', validators=[])
 
 
 # check for uwsgi, use PWD if present or getcwd() if not
@@ -143,9 +141,9 @@ def handleLogin():
     # if fromURI is None:
     #     fromURI = '%s/login' % cfg.baseurl
     app.logger.info('redirectURI [%s] fromURI [%s]' % (redirectURI, fromURI))
-    form = LoginForm(me='', 
-                     client_id=cfg.client_id, 
-                     redirect_uri=redirectURI, 
+    form = LoginForm(me='',
+                     client_id=cfg.client_id,
+                     redirect_uri=redirectURI,
                      from_uri=fromURI)
 
     if form.validate_on_submit():
@@ -160,7 +158,7 @@ def handleLogin():
                 authURL = url
                 break
             if authURL is not None:
-                url = ParseResult(authURL.scheme, 
+                url = ParseResult(authURL.scheme,
                                   authURL.netloc,
                                   authURL.path,
                                   authURL.params,
@@ -174,14 +172,14 @@ def handleLogin():
                 if db is not None:
                     key  = 'login-%s' % me
                     data = db.hgetall(key)
-                    if data and 'token' in data: # clear any existing auth data
+                    if data and 'token' in data:  # clear any existing auth data
                         db.delete('token-%s' % data['token'])
                         db.hdel(key, 'token')
                     db.hset(key, 'from_uri',     form.from_uri.data)
                     db.hset(key, 'redirect_uri', form.redirect_uri.data)
                     db.hset(key, 'client_id',    form.client_id.data)
                     db.hset(key, 'scope',        'post')
-                    db.expire(key, cfg.auth_timeout) # expire in N minutes unless successful
+                    db.expire(key, cfg.auth_timeout)  # expire in N minutes unless successful
                 app.logger.info('redirecting to [%s]' % url)
                 return redirect(url)
         else:
@@ -192,7 +190,7 @@ def handleLogin():
     templateContext['form']  = form
     return render_template('login.jinja', **templateContext)
 
-@app.route('/success', methods=['GET',])
+@app.route('/success', methods=['GET', ])
 def handleLoginSuccess():
     app.logger.info('handleLoginSuccess [%s]' % request.method)
     scope = None
@@ -205,7 +203,7 @@ def handleLoginSuccess():
         key  = 'login-%s' % me
         data = db.hgetall(key)
         if data:
-            r = ninka.indieauth.validateAuthCode(code=code, 
+            r = ninka.indieauth.validateAuthCode(code=code,
                                                  client_id=me,
                                                  redirect_uri=data['redirect_uri'])
             if r['status'] == requests.codes.ok:
@@ -214,7 +212,7 @@ def handleLoginSuccess():
                 from_uri = data['from_uri']
                 token    = str(uuid.uuid4())
 
-                db.hset(key, 'code',  code)
+                db.hset(key, 'code', code)
                 db.hset(key, 'token', token)
                 db.expire(key, cfg['auth_timeout'])
                 db.set('token-%s' % token, key)
@@ -237,7 +235,7 @@ def handleLoginSuccess():
     else:
         return 'authentication failed', 403
 
-@app.route('/auth', methods=['GET',])
+@app.route('/auth', methods=['GET', ])
 def handleAuth():
     app.logger.info('handleAuth [%s]' % request.method)
     result = False
@@ -308,7 +306,7 @@ def handleMicroPub():
                 if domain == cfg.our_domain and checkAccessToken(access_token):
                     data = { 'domain': domain }
                     for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
-                                'category', 'slug', 'location',  'syndication', 'syndicate-to',
+                                'category', 'slug', 'location', 'syndication', 'syndicate-to',
                                 'in-reply-to', 'repost-of', 'like-of'):
                         data[key] = request.form.get(key)
                         app.logger.info('    %s = [%s]' % (key, data[key]))
@@ -350,7 +348,7 @@ def handleToken():
         if access_token:
             access_token = access_token.replace('Bearer ', '')
         else:
-            access_token 
+            access_token
         me, client_id, scope = checkAccessToken(access_token)
 
         if me is None or client_id is None:
@@ -376,11 +374,11 @@ def handleToken():
         app.logger.info('    state        [%s]' % state)
         app.logger.info('    redirect_uri [%s]' % redirect_uri)
 
-        # r = ninka.indieauth.validateAuthCode(code=code, 
+        # r = ninka.indieauth.validateAuthCode(code=code,
         #                                      client_id=me,
         #                                      state=state,
         #                                      redirect_uri=redirect_uri)
-        r = validateAuthCode(code=code, 
+        r = ninka.indieauth.validateAuthCode(code=code,
                                              client_id=me,
                                              state=state,
                                              redirect_uri=redirect_uri)
@@ -415,7 +413,7 @@ def validURL(targetURL):
     return result
 
 def extractHCard(mf2Data):
-    result = { 'name': '', 
+    result = { 'name': '',
                'url':  '',
              }
     if 'items' in mf2Data:
@@ -437,6 +435,7 @@ def processVouch(sourceURL, targetURL, vouchDomain):
 
     yep, super simple but enough for me to test implement vouches
     """
+    result = False
     vouchDomains = []
     vouchFile    = os.path.join(cfg.basepath, 'vouch_domains.txt')
     if os.isfile(vouchFile):
@@ -462,6 +461,7 @@ def processVouch(sourceURL, targetURL, vouchDomain):
                     result = True
                     with open(vouchFile, 'a+') as h:
                         h.write('\n%s' % vouchDomain)
+    return result
 
 def mention(sourceURL, targetURL, vouchDomain=None):
     """Process the Webmention of the targetURL from the sourceURL.
@@ -523,8 +523,6 @@ def initLogging(logger, logpath=None, echo=False):
     logFormatter = logging.Formatter("%(asctime)s %(levelname)-9s %(message)s", "%Y-%m-%d %H:%M:%S")
 
     if logpath is not None:
-        from logging.handlers import RotatingFileHandler
-
         logfilename = os.path.join(logpath, 'indieweb.log')
         logHandler  = logging.handlers.RotatingFileHandler(logfilename, maxBytes=1024 * 1024 * 100, backupCount=7)
         logHandler.setFormatter(logFormatter)

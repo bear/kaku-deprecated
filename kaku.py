@@ -22,6 +22,8 @@ import ninka
 import ronkyuu
 import requests
 
+from logging.handlers import RotatingFileHandler
+
 from bearlib.config import Config
 from bearlib.tools import baseDomain
 from urlparse import ParseResult
@@ -524,7 +526,7 @@ def initLogging(logger, logpath=None, echo=False):
 
     if logpath is not None:
         logfilename = os.path.join(logpath, 'indieweb.log')
-        logHandler  = logging.handlers.RotatingFileHandler(logfilename, maxBytes=1024 * 1024 * 100, backupCount=7)
+        logHandler  = RotatingFileHandler(logfilename, maxBytes=1024 * 1024 * 100, backupCount=7)
         logHandler.setFormatter(logFormatter)
         logger.addHandler(logHandler)
 

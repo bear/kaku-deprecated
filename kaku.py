@@ -187,7 +187,7 @@ def handleLogin():
         else:
             return 'insert fancy no auth endpoint found error message here', 403
 
-    buildTemplateContext(cfg, me)
+    templateContext = {}
     templateContext['title'] = 'Sign In'
     templateContext['form']  = form
     return render_template('login.jinja', **templateContext)

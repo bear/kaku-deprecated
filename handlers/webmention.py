@@ -5,22 +5,44 @@ import datetime
 
 from urlparse import urlparse, ParseResult
 from mf2py.parser import Parser
+from bearlib.config import Config
 
 import ronkyuu
 
-cfg = None
-log = None
+
+_ourPath = os.path.dirname(__file__)
 
 def setup(config, logger):
-    cfg = config
-    log = logger
-
+    pass
 
 _mention = """date: %(postDate)s
 url: %(sourceURL)s
 
 [%(sourceURL)s](%(sourceURL)s)
 """
+
+#
+# this handler expects a config file to be found in the same directory
+# where it is located that points to the domain's configuration
+# e.g. ./<domain>.cfg
+#
+def getDomainConfig(domain=None):
+    result  = None
+    cfgfile = os.path.join(_ourPath, '%s.cfg' % domain)
+    if domain is not None and os.path.exists(cfgfile):
+        result = Config()
+        result.fromJson(cfgfile)
+    return result
+
+def buildTemplateContext(config, domainCfg):
+    result = {}
+    for key in ('baseurl', 'title', 'meta'):
+        if key in domainCfg:
+            value = domainCfg[key]
+        else:
+            value = ''
+        result[key] = value
+    return result
 
 def extractHCard(mf2Data):
     result = { 'name': '', 
@@ -99,13 +121,13 @@ def processVouch(sourceURL, targetURL, vouchDomain):
                     with open(vouchFile, 'a+') as h:
                         h.write('\n%s' % vouchDomain)
 
-def inbound(sourceURL, targetURL, vouchDomain=None, domainConfig=None):
+def inbound(domain, sourceURL, targetURL, vouchDomain=None, db=None):
     result = False
-    with open(os.path.join(domainConfig.logpath, 'mentions.log'), 'a+') as h:
+    with open(os.path.join(_ourPath, 'mentions.log'), 'a+') as h:
         h.write('target=%s source=%s vouch=%s\n' % (targetURL, sourceURL, vouchDomain))
 
-    r = requests.get(sourceURL, verify=False)
-    if r.status_code == requests.codes.ok:
+    domainCfg = getDomainConfig(domain)
+    if domainCfg is not None:
         mentionData = { 'sourceURL':   sourceURL,
                         'targetURL':   targetURL,
                         'vouchDomain': vouchDomain,
@@ -113,37 +135,34 @@ def inbound(sourceURL, targetURL, vouchDomain=None, domainConfig=None):
                         'received':    datetime.date.today().strftime('%d %b %Y %H:%M'),
                         'postDate':    datetime.date.today().strftime('%Y-%m-%dT%H:%M:%S')
                       }
-        if 'charset' in r.headers.get('content-type', ''):
-            mentionData['content'] = r.text
-        else:
-            mentionData['content'] = r.content
-
-        if vouchDomain is not None and domainConfig.require_vouch:
+        if vouchDomain is not None and domainCfg.require_vouch:
             mentionData['vouched'] = processVouch(sourceURL, targetURL, vouchDomain)
             result                 = mentionData['vouched']
             log.info('result of vouch? %s' % result)
         else:
-            result = not domainConfig.require_vouch
-            log.info('no vouch domain, result %s' % result)
+            result = True
 
-        mf2Data = Parser(doc=mentionData['content']).to_dict()
-        hcard   = extractHCard(mf2Data)
+        if result:
+            # mf2Data = Parser(doc=mentionData['content']).to_dict()
+            # hcard   = extractHCard(mf2Data)
 
-        mentionData['hcardName'] = hcard['name']
-        mentionData['hcardURL']  = hcard['url']
-        mentionData['mf2data']   = mf2Data
+            # mentionData['hcardName'] = hcard['name']
+            # mentionData['hcardURL']  = hcard['url']
+            # mentionData['mf2data']   = mf2Data
+            # sData  = json.dumps(mentionData)
+            # safeID = generateSafeName(sourceURL)
+            # if db is not None:
+            #     db.set('mention::%s' % safeID, sData)
 
-        sData  = json.dumps(mentionData)
-        safeID = generateSafeName(sourceURL)
-        if db is not None:
-            db.set('mention::%s' % safeID, sData)
+            # targetFile = os.path.join(domainCfg.basepath, safeID)
+            # with open(targetFile, 'a+') as h:
+            #     h.write(sData)
 
-        targetFile = os.path.join(domainConfig.basepath, safeID)
-        with open(targetFile, 'a+') as h:
-            h.write(sData)
+            # mentionFile = generateMentionName(targetURL, result)
+            # with open(mentionFile, 'w') as h:
+            #     h.write(_mention % mentionData)
 
-        mentionFile = generateMentionName(targetURL, result)
-        with open(mentionFile, 'w') as h:
-            h.write(_mention % mentionData)
+            if db is not None:
+               db.rpush('webmentions', json.dumps(mentionData))
 
     return result

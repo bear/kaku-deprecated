@@ -169,7 +169,10 @@ def micropub(data, db, log, siteConfigFilename):
                                      'slug':      slug,
                                      'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                                      'location':  '%s%s' % (data['baseurl'], location),
-                                     'payload':   data,
+                                     'payload':   {
+                                         'micropub': data,
+                                         'siteConfig': siteConfig,
+                                     },
                                    }
                         if siteConfig.db is not None:
                             siteConfig.db.rpush('kaku-events', json.dumps(event))

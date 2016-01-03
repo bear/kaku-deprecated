@@ -117,10 +117,6 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
     for href in mentions['refs']:
         if href != sourceURL and href == targetURL:
             log.info('post at %s was referenced by %s' % (targetURL, sourceURL))
-            utcdate   = datetime.datetime.utcnow()
-            tzLocal   = pytz.timezone('America/New_York')
-            timestamp = tzLocal.localize(utcdate, is_dst=None)
-
             if vouchRequired:
                 if vouchDomain is None:
                     vouched = False
@@ -133,20 +129,24 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                 result  = True
 
             if result:
-                mf2Data = Parser(doc=mentions['content']).to_dict()
-                hcard   = extractHCard(mf2Data)
-                event   = { 'type':        'webmention',
-                            'sourceURL':   sourceURL,
-                            'targetURL':   targetURL,
-                            'vouchDomain': vouchDomain,
-                            'vouched':     vouched,
-                            'received':    timestamp.strftime('%d %b %Y %H:%M'),
-                            'postDate':    timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
-                            'payload':     {
-                                'hcard': hcard,
-                                'mf2data': mf2Data,
-                            },
-                          }
+                utcdate   = datetime.datetime.utcnow()
+                tzLocal   = pytz.timezone('America/New_York')
+                timestamp = tzLocal.localize(utcdate, is_dst=None)
+                mf2Data   = Parser(doc=mentions['content']).to_dict()
+                hcard     = extractHCard(mf2Data)
+                event     = { 'type':        'webmention',
+                              'sourceURL':   sourceURL,
+                              'targetURL':   targetURL,
+                              'vouchDomain': vouchDomain,
+                              'vouched':     vouched,
+                              'received':    timestamp.strftime('%d %b %Y %H:%M'),
+                              'postDate':    timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
+                              'payload':     {
+                                  'hcard': hcard,
+                                  'mf2data': mf2Data,
+                                  'siteConfig': siteConfig,
+                              },
+                            }
 
                 # mentionData['hcardName'] = hcard['name']
                 # mentionData['hcardURL']  = hcard['url']

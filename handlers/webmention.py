@@ -6,11 +6,14 @@ import datetime
 
 from urlparse import urlparse
 from mf2py.parser import Parser
+from bearlib.config import Config
 
 import pytz
 import ninka
 import ronkyuu
 
+
+siteConfig = Config()
 
 def extractHCard(mf2Data):
     result = { 'name': '',
@@ -29,11 +32,11 @@ def generateSafeName(sourceURL):
     result  = '%s_%s.mention' % (urlData.netloc, urlData.path.replace('/', '_'))
     return result
 
-def generateMentionName(cfg, targetURL, vouched):
+def generateMentionName(targetURL, vouched):
     urlData     = urlparse(targetURL)
     urlPaths    = urlData.path.split('/')
     basePath    = '/'.join(urlPaths[2:-1])
-    mentionPath = os.path.join(cfg.contentpath, 'content', basePath)
+    mentionPath = os.path.join(siteConfig.paths.content, 'content', basePath)
     mentionSlug = urlPaths[-1]
     nMax        = 0
 
@@ -52,7 +55,7 @@ def generateMentionName(cfg, targetURL, vouched):
                 nMax = n
     return os.path.join(mentionPath, '%s.%03d%s' % (mentionSlug, nMax + 1, mentionExt))
 
-def processVouch(dataPath, sourceURL, targetURL, vouchDomain):
+def processVouch(sourceURL, targetURL, vouchDomain):
     """Determine if a vouch domain is valid.
 
     This implements a very simple method for determining if a vouch should
@@ -65,7 +68,7 @@ def processVouch(dataPath, sourceURL, targetURL, vouchDomain):
     """
     result       = False
     vouchDomains = []
-    vouchFile    = os.path.join(dataPath, 'vouch_domains.txt')
+    vouchFile    = os.path.join(siteConfig.paths.content, 'vouch_domains.txt')
     if os.isfile(vouchFile):
         with open(vouchFile, 'r') as h:
             for domain in h.readlines():
@@ -91,19 +94,25 @@ def processVouch(dataPath, sourceURL, targetURL, vouchDomain):
                         h.write('\n%s' % vouchDomain)
     return result
 
-def mention(sourceURL, targetURL, dataPath, db, vouchDomain=None, vouchRequired=False, log=None):
+def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None, vouchRequired=False):
     """Process the Webmention of the targetURL from the sourceURL.
 
     To verify that the sourceURL has indeed referenced our targetURL
     we run findMentions() at it and scan the resulting href list.
     """
+    # yes, I know, it's a module global...
+    if os.path.exists(siteConfigFilename):
+        siteConfig.fromJson(siteConfigFilename)
+    siteConfig.db  = db
+    siteConfig.log = log
+
     log.info('discovering Webmention endpoint for %s' % sourceURL)
 
     mentions = ronkyuu.findMentions(sourceURL)
     result   = False
     vouched  = False
     log.info('mentions %s' % mentions)
-    with open(os.path.join(dataPath, 'mentions.log'), 'a+') as h:
+    with open(os.path.join(siteConfig.paths.content, 'mentions.log'), 'a+') as h:
         h.write('target=%s source=%s vouch=%s\n' % (targetURL, sourceURL, vouchDomain))
     for href in mentions['refs']:
         if href != sourceURL and href == targetURL:
@@ -117,7 +126,7 @@ def mention(sourceURL, targetURL, dataPath, db, vouchDomain=None, vouchRequired=
                     vouched = False
                     result  = False
                 else:
-                    vouched = processVouch(dataPath, sourceURL, targetURL, vouchDomain)
+                    vouched = processVouch(siteConfig.paths.content, sourceURL, targetURL, vouchDomain)
                     result  = vouched
             else:
                 vouched = False

@@ -1,4 +1,10 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+:copyright: (c) 2015-2016 by Mike Taylor
+:license: MIT, see LICENSE for more details.
+
+Micropub handler
+"""
 
 import os
 import re
@@ -12,29 +18,13 @@ from dateutil.parser import parse
 from unidecode import unidecode
 
 
-_ourPath = os.path.dirname(__file__)
+siteConfig = Config()
 
-def setup():
-    pass
-
-#
-# this handler expects a config file to be found in the same directory
-# where it is located that points to the domain's configuration
-# e.g. ./<domain>.cfg
-#
-def getDomainConfig(domain=None):
-    result  = None
-    cfgfile = os.path.join(_ourPath, '%s.cfg' % domain)
-    if domain is not None and os.path.exists(cfgfile):
-        result = Config()
-        result.fromJson(cfgfile)
-    return result
-
-def buildTemplateContext(config, domainCfg):
+def buildTemplateContext():
     result = {}
     for key in ('baseurl', 'title', 'meta'):
-        if key in domainCfg:
-            value = domainCfg[key]
+        if key in siteConfig:
+            value = siteConfig[key]
         else:
             value = ''
         result[key] = value
@@ -51,15 +41,13 @@ def createSlug(text, delim=u'-'):
 def createPath(path):
     result = True
     try:
-        print path
         os.makedirs(path)
     except OSError as exc:  # Python >2.5
-        print exc
+        siteConfig.log.exception(exc)
         if os.path.isdir(path):
             pass
         else:
             result = False
-    print result
     return result
 
 _article_file = """Title:   %(title)s
@@ -72,7 +60,7 @@ Summary: %(title)s
 %(content)s
 """
 
-def createBookmark(data, domainCfg, db):
+def createBookmark(data):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -80,7 +68,7 @@ def createBookmark(data, domainCfg, db):
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = 'bookmarks'
-    location  = os.path.join(domainCfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
+    location  = os.path.join(siteConfig.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
     task      = { 'action':    'create',
                   'type':      'bookmark',
                   'slug':      slug,
@@ -89,14 +77,14 @@ def createBookmark(data, domainCfg, db):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if db is not None:
-        db.rpush('micropub-tasks', json.dumps(task))
+    if siteConfig.db is not None:
+        siteConfig.db.rpush('micropub-tasks', json.dumps(task))
         code = 202
     else:
         code = 500
     return location, code
 
-def createArticle(data, domainCfg, db):
+def createArticle(data):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -108,7 +96,7 @@ def createArticle(data, domainCfg, db):
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = createSlug(title)
-    location  = os.path.join(domainCfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
+    location  = os.path.join(siteConfig.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
     task      = { 'action':    'create',
                   'type':      'article',
                   'slug':      slug,
@@ -118,14 +106,14 @@ def createArticle(data, domainCfg, db):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if db is not None:
-        db.rpush('micropub-tasks', json.dumps(task))
+    if siteConfig.db is not None:
+        siteConfig.db.rpush('micropub-tasks', json.dumps(task))
         code = 202
     else:
         code = 500
     return location, code
 
-def createNote(data, domainCfg, db):
+def createNote(data):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -137,7 +125,7 @@ def createNote(data, domainCfg, db):
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = createSlug(title)
-    location  = os.path.join(domainCfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
+    location  = os.path.join(siteConfig.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
     task      = { 'action':    'create',
                   'type':      'note',
                   'slug':      slug,
@@ -147,14 +135,19 @@ def createNote(data, domainCfg, db):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if db is not None:
-        db.rpush('micropub-tasks', json.dumps(task))
+    if siteConfig.db is not None:
+        siteConfig.db.rpush('micropub-tasks', json.dumps(task))
         code = 202
     else:
         code = 500
     return location, code
 
-def micropub(data, db, log):
+def micropub(data, db, log, siteConfigFilename):
+    # yes, I know, it's a module global...
+    if os.path.exists(siteConfigFilename):
+        siteConfig.fromJson(siteConfigFilename)
+    siteConfig.db  = db
+    siteConfig.log = log
     try:
         if data['event'] == 'create':
             if 'h' in data:
@@ -178,8 +171,8 @@ def micropub(data, db, log):
                                      'location':  '%s%s' % (data['baseurl'], location),
                                      'payload':   data,
                                    }
-                        if db is not None:
-                            db.rpush('kaku-events', json.dumps(event))
+                        if siteConfig.db is not None:
+                            siteConfig.db.rpush('kaku-events', json.dumps(event))
                             return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         log.exception('Exception during micropub handling')

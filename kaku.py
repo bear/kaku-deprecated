@@ -1,31 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-:copyright: (c) 2015 by Mike Taylor
+:copyright: (c) 2015-2016 by Mike Taylor
 :license: MIT, see LICENSE for more details.
 
-A Flask service to handle inbound HTML
-events that IndieWeb Micropub requires.
+A Flask service to handle the more dynamic HTML
+events that IndieWeb requires and would otherwise
+require javascript somewhere on the site.
 """
 
 import os
 import sys
-import re
 import uuid
 import urllib
 import logging
 
-import redis
 import ninka
+import redis
 import requests
 
 from logging.handlers import RotatingFileHandler
-
+from urlparse import ParseResult
 from bearlib.config import Config
 from bearlib.tools import baseDomain
-from urlparse import ParseResult
-from unidecode import unidecode
-
 from flask import Flask, request, redirect, render_template, session
 from flask.ext.wtf import Form
 from wtforms import TextField, HiddenField
@@ -47,10 +44,6 @@ class PubishForm(Form):
     syndicateto  = TextField('syndicate-to', validators=[])
 
 class TokenForm(Form):
-    # app_id     = TextField('app_id', validators = [ Required() ])
-    # invalidate = BooleanField('invalidate')
-    # app_token  = TextField('app_token')
-    # client_id  = HiddenField('client_id')
     code         = TextField('code', validators=[])
     me           = TextField('me', validators=[])
     redirect_uri = TextField('redirect_uri', validators=[])
@@ -72,23 +65,16 @@ else:
     _ourPath    = os.getcwd()
     _configFile = os.path.join(_ourPath, 'kaku.cfg')
 
-# these are done here instead of at top to allow the path to be inserted above
+# uwsgi apps do not have their current working directory set (that I know of)
+# to anything anywhere near the application so these are done at this point
+# instead of at top to allow the path to be inserted into the import path list.
 from handlers.webmention import mention
 from handlers.micropub import micropub
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'foo'  # replaced downstream
 cfg = None
 db  = None
-
-
-# from http://flask.pocoo.org/snippets/5/
-_punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
-def createSlug(text, delim=u'-'):
-    result = []
-    for word in _punct_re.split(text.lower()):
-        result.extend(unidecode(word).split())
-    return unicode(delim.join(result))
+app.config['SECRET_KEY'] = 'foo'  # replaced downstream
 
 def clearAuth():
     if 'indieauth_token' in session:
@@ -102,8 +88,8 @@ def clearAuth():
     session.pop('indieauth_id',    None)
 
 def checkAuth():
-    authed        = False
-    indieauth_id  = None
+    authed       = False
+    indieauth_id = None
     if 'indieauth_id' in session and 'indieauth_token' in session:
         app.logger.info('session cookie found')
         indieauth_id    = session['indieauth_id']
@@ -142,8 +128,7 @@ def handleLogin():
     me          = None
     redirectURI = '%s/success' % cfg.baseurl
     fromURI     = request.args.get('from_uri')
-    # if fromURI is None:
-    #     fromURI = '%s/login' % cfg.baseurl
+
     app.logger.info('redirectURI [%s] fromURI [%s]' % (redirectURI, fromURI))
     form = LoginForm(me='',
                      client_id=cfg.client_id,
@@ -279,10 +264,10 @@ def handleMicroPub():
     else:
         if request.method == 'POST':
                 domain = baseDomain(me, includeScheme=False)
-                if domain == cfg.our_domain and checkAccessToken(access_token):
+                if domain == cfg.client_id and checkAccessToken(access_token):
                     data = { 'domain': domain,
                              'baseurl': cfg.baseurl,
-                             'basepath': cfg.basepath,
+                             'basepath': cfg.baseroute,
                              'event':  'create'
                            }
                     for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
@@ -294,7 +279,7 @@ def handleMicroPub():
                         if key not in data:
                             data[key] = request.form.get(key)
                             app.logger.info('    %s = [%s]' % (key, data[key]))
-                    return micropub(data, db, app.logger)
+                    return micropub(data, db, app.logger, cfg.site_config)
                 else:
                     return 'Unauthorized', 403
         elif request.method == 'GET':
@@ -336,10 +321,6 @@ def handleToken():
         app.logger.info('    state        [%s]' % state)
         app.logger.info('    redirect_uri [%s]' % redirect_uri)
 
-        # r = ninka.indieauth.validateAuthCode(code=code,
-        #                                      client_id=me,
-        #                                      state=state,
-        #                                      redirect_uri=redirect_uri)
         r = ninka.indieauth.validateAuthCode(code=code,
                                              client_id=me,
                                              state=state,
@@ -356,30 +337,11 @@ def handleToken():
                 db.set(token_key, key)
 
             app.logger.info('  token generated for [%s] : [%s]' % (key, token))
-
             params = { 'me': me,
                        'scope': scope,
                        'access_token': token
                      }
             return (urllib.urlencode(params), 200, {'Content-Type': 'application/x-www-form-urlencoded'})
-
-# @app.route('/publish', methods=['GET',])
-# def handlePublish():
-#     app.logger.info('handlePublish [%s]' % request.method)
-#     form = MicroPubForm(h='',
-#                         content='',
-#                         title='',
-#                         published='',
-#                         inreplyto='',
-#                         syndicateto=''
-#                        )
-
-#     if form.validate_on_submit():
-
-#     buildTemplateContext(cfg, me)
-#     templateContext['title'] = 'Publish'
-#     templateContext['form']  = form
-#     return render_template('publish.jinja', **templateContext)
 
 def validURL(targetURL):
     """Validate the target URL exists by making a HEAD request for it
@@ -401,17 +363,15 @@ def handleWebmention():
         target = request.form.get('target')
         vouch  = request.form.get('vouch')
         app.logger.info('source: %s target: %s vouch %s' % (source, target, vouch))
-
-        if cfg.basepath in target:
+        if cfg.baseroute in target:
             valid = validURL(target)
             app.logger.info('valid? %s' % valid)
-
             if valid == requests.codes.ok:
-                valid, vouched = mention(source, target, _ourPath, db, vouch, cfg.require_vouch, app.logger)
+                valid, vouched = mention(source, target, db, app.logger, cfg.site_config, vouch, cfg.vouch_required)
                 if valid:
                     return redirect(target)
                 else:
-                    if cfg.require_vouch and not vouched:
+                    if cfg.vouch_required and not vouched:
                         return 'Vouch required for webmention', 449
                     else:
                         return 'Webmention is invalid', 400
@@ -422,25 +382,21 @@ def handleWebmention():
 
 def initLogging(logger, logpath=None, echo=False):
     logFormatter = logging.Formatter("%(asctime)s %(levelname)-9s %(message)s", "%Y-%m-%d %H:%M:%S")
-
     if logpath is not None:
         logfilename = os.path.join(logpath, 'kaku.log')
         logHandler  = RotatingFileHandler(logfilename, maxBytes=1024 * 1024 * 100, backupCount=7)
         logHandler.setFormatter(logFormatter)
         logger.addHandler(logHandler)
-
     if echo:
         echoHandler = logging.StreamHandler()
         echoHandler.setFormatter(logFormatter)
         logger.addHandler(echoHandler)
-
     logger.setLevel(logging.INFO)
     logger.info('starting kaku')
 
 def loadConfig(configFilename, host=None, port=None, logpath=None):
     result = Config()
     result.fromJson(configFilename)
-
     if host is not None:
         result.host = host
     if port is not None:
@@ -453,7 +409,6 @@ def loadConfig(configFilename, host=None, port=None, logpath=None):
         result.require_vouch = False
     if 'our_domain' not in result:
         result.our_domain = baseDomain(result.client_id, includeScheme=False)
-
     return result
 
 def getRedis(config):
@@ -470,7 +425,7 @@ def doStart(app, configFile, ourHost=None, ourPort=None, ourPath=None, echo=Fals
     _db  = None
     if 'secret' in _cfg:
         app.config['SECRET_KEY'] = _cfg.secret
-    initLogging(app.logger, _cfg.paths.log, echo=echo)
+    initLogging(app.logger, _cfg.logpath, echo=echo)
     if 'redis' in _cfg:
         _db = getRedis(_cfg.redis)
     app.logger.info('configuration loaded from %s' % configFile)

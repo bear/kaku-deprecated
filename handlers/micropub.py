@@ -18,13 +18,11 @@ from dateutil.parser import parse
 from unidecode import unidecode
 
 
-siteConfig = Config()
-
-def buildTemplateContext():
+def buildTemplateContext(cfg):
     result = {}
     for key in ('baseurl', 'title', 'meta'):
-        if key in siteConfig:
-            value = siteConfig[key]
+        if key in cfg:
+            value = cfg[key]
         else:
             value = ''
         result[key] = value
@@ -38,12 +36,12 @@ def createSlug(text, delim=u'-'):
         result.extend(unidecode(word).split())
     return unicode(delim.join(result))
 
-def createPath(path):
+def createPath(path, log):
     result = True
     try:
         os.makedirs(path)
     except OSError as exc:  # Python >2.5
-        siteConfig.log.exception(exc)
+        log.exception(exc)
         if os.path.isdir(path):
             pass
         else:
@@ -60,7 +58,7 @@ Summary: %(title)s
 %(content)s
 """
 
-def createBookmark(data):
+def createBookmark(data, db, log, cfg):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -68,7 +66,7 @@ def createBookmark(data):
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = 'bookmarks'
-    location  = os.path.join(siteConfig.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
+    location  = os.path.join(cfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
     task      = { 'action':    'create',
                   'type':      'bookmark',
                   'slug':      slug,
@@ -77,14 +75,14 @@ def createBookmark(data):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if siteConfig.db is not None:
-        siteConfig.db.rpush('micropub-tasks', json.dumps(task))
+    if db is not None:
+        db.rpush('micropub-tasks', json.dumps(task))
         code = 202
     else:
         code = 500
     return location, code
 
-def createArticle(data):
+def createArticle(data, db, log, cfg):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -96,7 +94,7 @@ def createArticle(data):
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = createSlug(title)
-    location  = os.path.join(siteConfig.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
+    location  = os.path.join(cfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
     task      = { 'action':    'create',
                   'type':      'article',
                   'slug':      slug,
@@ -106,14 +104,14 @@ def createArticle(data):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if siteConfig.db is not None:
-        siteConfig.db.rpush('micropub-tasks', json.dumps(task))
+    if db is not None:
+        db.rpush('micropub-tasks', json.dumps(task))
         code = 202
     else:
         code = 500
     return location, code
 
-def createNote(data):
+def createNote(data, db, log, cfg):
     if 'published' in data and data['published'] is not None:
         d = parse(data['published'])
     else:
@@ -125,7 +123,7 @@ def createNote(data):
     tzLocal   = pytz.timezone('America/New_York')
     timestamp = tzLocal.localize(d, is_dst=None)
     slug      = createSlug(title)
-    location  = os.path.join(siteConfig.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
+    location  = os.path.join(cfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
     task      = { 'action':    'create',
                   'type':      'note',
                   'slug':      slug,
@@ -135,8 +133,8 @@ def createNote(data):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if siteConfig.db is not None:
-        siteConfig.db.rpush('micropub-tasks', json.dumps(task))
+    if db is not None:
+        db.rpush('micropub-tasks', json.dumps(task))
         code = 202
     else:
         code = 500
@@ -144,10 +142,9 @@ def createNote(data):
 
 def micropub(data, db, log, siteConfigFilename):
     # yes, I know, it's a module global...
+    cfg = Config()
     if os.path.exists(siteConfigFilename):
-        siteConfig.fromJson(siteConfigFilename)
-    siteConfig.db  = db
-    siteConfig.log = log
+        cfg.fromJson(siteConfigFilename)
     try:
         if data['event'] == 'create':
             if 'h' in data:
@@ -171,11 +168,11 @@ def micropub(data, db, log, siteConfigFilename):
                                      'location':  '%s%s' % (data['baseurl'], location),
                                      'payload':   {
                                          'micropub': data,
-                                         'siteConfig': siteConfig,
+                                         'siteConfig': cfg,
                                      },
                                    }
-                        if siteConfig.db is not None:
-                            siteConfig.db.rpush('kaku-events', json.dumps(event))
+                        if db is not None:
+                            db.rpush('kaku-events', json.dumps(event, indent=2))
                             return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         log.exception('Exception during micropub handling')

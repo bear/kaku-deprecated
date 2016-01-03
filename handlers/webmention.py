@@ -13,8 +13,6 @@ import ninka
 import ronkyuu
 
 
-siteConfig = Config()
-
 def extractHCard(mf2Data):
     result = { 'name': '',
                'url':  '',
@@ -32,11 +30,11 @@ def generateSafeName(sourceURL):
     result  = '%s_%s.mention' % (urlData.netloc, urlData.path.replace('/', '_'))
     return result
 
-def generateMentionName(targetURL, vouched):
+def generateMentionName(targetURL, vouched, cfg):
     urlData     = urlparse(targetURL)
     urlPaths    = urlData.path.split('/')
     basePath    = '/'.join(urlPaths[2:-1])
-    mentionPath = os.path.join(siteConfig.paths.content, 'content', basePath)
+    mentionPath = os.path.join(cfg.paths.content, 'content', basePath)
     mentionSlug = urlPaths[-1]
     nMax        = 0
 
@@ -55,7 +53,7 @@ def generateMentionName(targetURL, vouched):
                 nMax = n
     return os.path.join(mentionPath, '%s.%03d%s' % (mentionSlug, nMax + 1, mentionExt))
 
-def processVouch(sourceURL, targetURL, vouchDomain):
+def processVouch(sourceURL, targetURL, vouchDomain, cfg):
     """Determine if a vouch domain is valid.
 
     This implements a very simple method for determining if a vouch should
@@ -68,7 +66,7 @@ def processVouch(sourceURL, targetURL, vouchDomain):
     """
     result       = False
     vouchDomains = []
-    vouchFile    = os.path.join(siteConfig.paths.content, 'vouch_domains.txt')
+    vouchFile    = os.path.join(cfg.paths.content, 'vouch_domains.txt')
     if os.isfile(vouchFile):
         with open(vouchFile, 'r') as h:
             for domain in h.readlines():
@@ -100,20 +98,15 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
     To verify that the sourceURL has indeed referenced our targetURL
     we run findMentions() at it and scan the resulting href list.
     """
-    # yes, I know, it's a module global...
+    cfg = Config()
     if os.path.exists(siteConfigFilename):
-        siteConfig.fromJson(siteConfigFilename)
-    siteConfig.db  = db
-    siteConfig.log = log
-
+        cfg.fromJson(siteConfigFilename)
     log.info('discovering Webmention endpoint for %s' % sourceURL)
 
     mentions = ronkyuu.findMentions(sourceURL)
     result   = False
     vouched  = False
     log.info('mentions %s' % mentions)
-    with open(os.path.join(siteConfig.paths.content, 'mentions.log'), 'a+') as h:
-        h.write('target=%s source=%s vouch=%s\n' % (targetURL, sourceURL, vouchDomain))
     for href in mentions['refs']:
         if href != sourceURL and href == targetURL:
             log.info('post at %s was referenced by %s' % (targetURL, sourceURL))
@@ -122,7 +115,7 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                     vouched = False
                     result  = False
                 else:
-                    vouched = processVouch(siteConfig.paths.content, sourceURL, targetURL, vouchDomain)
+                    vouched = processVouch(cfg.paths.content, sourceURL, targetURL, vouchDomain)
                     result  = vouched
             else:
                 vouched = False
@@ -144,7 +137,7 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                               'payload':     {
                                   'hcard': hcard,
                                   'mf2data': mf2Data,
-                                  'siteConfig': siteConfig,
+                                  'siteConfig': cfg,
                               },
                             }
 
@@ -165,7 +158,7 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                 #     h.write(_mention % mentionData)
 
                 if db is not None:
-                    db.rpush('kaku-events', json.dumps(event))
+                    db.rpush('kaku-events', json.dumps(event, indent=2))
                     result = True
                 else:
                     result = False

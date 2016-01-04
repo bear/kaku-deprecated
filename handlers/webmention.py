@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import json
 import datetime
 
 from urlparse import urlparse
@@ -155,8 +156,8 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                 # with open(mentionFile, 'w') as h:
                 #     h.write(_mention % mentionData)
 
-                db.set(key, data)
-                db.rpush('kaku-events', event)
+                db.set(key, json.dumps(data))
+                db.rpush('kaku-events', json.dumps(event))
 
     log.info('mention() returning %s' % result)
     return result, vouched

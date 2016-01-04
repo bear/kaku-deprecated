@@ -8,6 +8,7 @@ Micropub handler
 
 import os
 import re
+import json
 import pytz
 import datetime
 import traceback
@@ -159,8 +160,8 @@ def micropub(data, db, log, siteConfigFilename):
                         event    = { 'type': 'micropub',
                                      'key':  key,
                                    }
-                        db.set(key, data)
-                        db.rpush('kaku-events', event)
+                        db.set(key, json.dumps(data))
+                        db.rpush('kaku-events', json.dumps(event))
                         return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         log.exception('Exception during micropub handling')

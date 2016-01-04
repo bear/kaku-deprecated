@@ -8,7 +8,6 @@ Micropub handler
 
 import os
 import re
-import json
 import pytz
 import datetime
 import traceback
@@ -75,12 +74,8 @@ def createBookmark(data, db, log, cfg):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if db is not None:
-        db.rpush('micropub-tasks', json.dumps(task))
-        code = 202
-    else:
-        code = 500
-    return location, code
+    db.rpush('micropub-tasks', task)
+    return location, 202
 
 def createArticle(data, db, log, cfg):
     if 'published' in data and data['published'] is not None:
@@ -104,12 +99,8 @@ def createArticle(data, db, log, cfg):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if db is not None:
-        db.rpush('micropub-tasks', json.dumps(task))
-        code = 202
-    else:
-        code = 500
-    return location, code
+    db.rpush('micropub-tasks', task)
+    return location, 202
 
 def createNote(data, db, log, cfg):
     if 'published' in data and data['published'] is not None:
@@ -133,12 +124,8 @@ def createNote(data, db, log, cfg):
                   'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                   'location':  location
                 }
-    if db is not None:
-        db.rpush('micropub-tasks', json.dumps(task))
-        code = 202
-    else:
-        code = 500
-    return location, code
+    db.rpush('micropub-tasks', task)
+    return location, 202
 
 def micropub(data, db, log, siteConfigFilename):
     # yes, I know, it's a module global...
@@ -171,9 +158,8 @@ def micropub(data, db, log, siteConfigFilename):
                                          'siteConfig': cfg,
                                      },
                                    }
-                        if db is not None:
-                            db.rpush('kaku-events', json.dumps(event, indent=2))
-                            return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
+                        db.rpush('kaku-events', event)
+                        return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         log.exception('Exception during micropub handling')
 

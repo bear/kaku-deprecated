@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import json
 import datetime
 
 from urlparse import urlparse
@@ -157,11 +156,7 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                 # with open(mentionFile, 'w') as h:
                 #     h.write(_mention % mentionData)
 
-                if db is not None:
-                    db.rpush('kaku-events', json.dumps(event, indent=2))
-                    result = True
-                else:
-                    result = False
+                db.rpush('kaku-events', event)
 
     log.info('mention() returning %s' % result)
     return result, vouched

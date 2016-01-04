@@ -149,15 +149,17 @@ def micropub(data, db, log, siteConfigFilename):
                             title = 'event-%s' % timestamp.strftime('%H%M%S')
                         slug     = createSlug(title)
                         location = os.path.join(data['basepath'], str(timestamp.year), timestamp.strftime('%j'), slug)
-                        event    = { 'type':     'micropub',
-                                     'slug':      slug,
-                                     'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                                     'location':  '%s%s' % (data['baseurl'], location),
-                                     'payload':   {
-                                         'micropub': data,
-                                         'siteConfig': cfg,
-                                     },
+                        data     = { 'slug':       slug,
+                                     'timestamp':  timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                                     'location':   '%s%s' % (data['baseurl'], location),
+                                     'micropub':   data,
+                                     'siteConfig': cfg,
                                    }
+                        key      = 'micropub::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), slug)
+                        event    = { 'type': 'micropub',
+                                     'key':  key,
+                                   }
+                        db.set(key, data)
                         db.rpush('kaku-events', event)
                         return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:

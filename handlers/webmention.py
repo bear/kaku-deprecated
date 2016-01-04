@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
 import os
 import datetime
 
@@ -126,18 +125,18 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                 timestamp = tzLocal.localize(utcdate, is_dst=None)
                 mf2Data   = Parser(doc=mentions['content']).to_dict()
                 hcard     = extractHCard(mf2Data)
-                event     = { 'type':        'webmention',
-                              'sourceURL':   sourceURL,
+                data      = { 'sourceURL':   sourceURL,
                               'targetURL':   targetURL,
                               'vouchDomain': vouchDomain,
                               'vouched':     vouched,
-                              'received':    timestamp.strftime('%d %b %Y %H:%M'),
                               'postDate':    timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
-                              'payload':     {
-                                  'hcard': hcard,
-                                  'mf2data': mf2Data,
-                                  'siteConfig': cfg,
-                              },
+                              'hcard':       hcard,
+                              'mf2data':     mf2Data,
+                              'siteConfig':  cfg,
+                            }
+                key       = 'webmention::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), targetURL)
+                event     = { 'type': 'webmention',
+                              'key':  key,
                             }
 
                 # mentionData['hcardName'] = hcard['name']
@@ -156,6 +155,7 @@ def mention(sourceURL, targetURL, db, log, siteConfigFilename, vouchDomain=None,
                 # with open(mentionFile, 'w') as h:
                 #     h.write(_mention % mentionData)
 
+                db.set(key, data)
                 db.rpush('kaku-events', event)
 
     log.info('mention() returning %s' % result)

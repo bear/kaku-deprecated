@@ -14,7 +14,6 @@ import datetime
 import traceback
 
 from bearlib.config import Config
-from dateutil.parser import parse
 from unidecode import unidecode
 
 
@@ -35,98 +34,6 @@ def createSlug(text, delim=u'-'):
     for word in _punct_re.split(text.lower()):
         result.extend(unidecode(word).split())
     return unicode(delim.join(result))
-
-def createPath(path, log):
-    result = True
-    try:
-        os.makedirs(path)
-    except OSError as exc:  # Python >2.5
-        log.exception(exc)
-        if os.path.isdir(path):
-            pass
-        else:
-            result = False
-    return result
-
-_article_file = """Title:   %(title)s
-Date:    %(published)s
-Tags:    %(tags)s
-Author:  %(author)s
-Slug:    %(slug)s
-Summary: %(title)s
-
-%(content)s
-"""
-
-def createBookmark(data, db, log, cfg):
-    if 'published' in data and data['published'] is not None:
-        d = parse(data['published'])
-    else:
-        d = datetime.datetime.utcnow()
-    tzLocal   = pytz.timezone('America/New_York')
-    timestamp = tzLocal.localize(d, is_dst=None)
-    slug      = 'bookmarks'
-    location  = os.path.join(cfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
-    task      = { 'action':    'create',
-                  'type':      'bookmark',
-                  'slug':      slug,
-                  'url':       data['like-of'],
-                  'category':  data['category'],
-                  'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                  'location':  location
-                }
-    db.rpush('micropub-tasks', task)
-    return location, 202
-
-def createArticle(data, db, log, cfg):
-    if 'published' in data and data['published'] is not None:
-        d = parse(data['published'])
-    else:
-        d = datetime.datetime.utcnow()
-    if 'title' in data:
-        title = data['title']
-    else:
-        title = data['content'].split('\n')[0],
-    tzLocal   = pytz.timezone('America/New_York')
-    timestamp = tzLocal.localize(d, is_dst=None)
-    slug      = createSlug(title)
-    location  = os.path.join(cfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
-    task      = { 'action':    'create',
-                  'type':      'article',
-                  'slug':      slug,
-                  'title':     title,
-                  'content':   data['content'],
-                  'category':  data['category'],
-                  'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                  'location':  location
-                }
-    db.rpush('micropub-tasks', task)
-    return location, 202
-
-def createNote(data, db, log, cfg):
-    if 'published' in data and data['published'] is not None:
-        d = parse(data['published'])
-    else:
-        d = datetime.datetime.utcnow()
-    if 'title' in data:
-        title = data['title']
-    else:
-        title = data['content'].split('\n')[0],
-    tzLocal   = pytz.timezone('America/New_York')
-    timestamp = tzLocal.localize(d, is_dst=None)
-    slug      = createSlug(title)
-    location  = os.path.join(cfg.contentpath, str(timestamp.year), timestamp.strftime('%j'), slug)
-    task      = { 'action':    'create',
-                  'type':      'note',
-                  'slug':      slug,
-                  'title':     title,
-                  'content':   data['content'],
-                  'category':  data['category'],
-                  'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                  'location':  location
-                }
-    db.rpush('micropub-tasks', task)
-    return location, 202
 
 def micropub(data, db, log, siteConfigFilename):
     # yes, I know, it's a module global...
@@ -149,20 +56,30 @@ def micropub(data, db, log, siteConfigFilename):
                         else:
                             title = 'event-%s' % timestamp.strftime('%H%M%S')
                         slug     = createSlug(title)
-                        location = os.path.join(data['basepath'], str(timestamp.year), timestamp.strftime('%j'), slug)
-                        data     = { 'slug':       slug,
-                                     'timestamp':  timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                                     'location':   '%s%s' % (data['baseurl'], location),
-                                     'micropub':   data,
-                                     'siteConfig': cfg,
-                                   }
-                        key      = 'micropub::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), slug)
-                        event    = { 'type': 'micropub',
-                                     'key':  key,
-                                   }
-                        db.set(key, json.dumps(data))
-                        db.rpush('kaku-events', json.dumps(event))
-                        return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
+                        year     = str(timestamp.year)
+                        doy      = timestamp.strftime('%j')
+                        location = os.path.join(data['baseroute'], year, doy, slug)
+
+                        filename = os.path.join(cfg.paths.content, year, doy, '%s.md' % slug)
+                        if os.path.exists(filename):
+                          return ('Micropub CREATE failed, location already exists', 406)
+                        else:
+                          mdata = { 'slug':       slug,
+                                    'timestamp':  timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                                    'location':   '%s%s' % (data['baseurl'], location),
+                                    'year':       year,
+                                    'doy':        doy,
+                                    'micropub':   data,
+                                    'siteConfig': cfg,
+                                  }
+                          key   = 'micropub::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), slug)
+                          event = { 'type': 'micropub',
+                                    'key':  key,
+                                  }
+                          db.set(key, json.dumps(mdata))
+                          db.rpush('kaku-events', json.dumps(event))
+                          db.publish('kaku', 'update')
+                          return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         log.exception('Exception during micropub handling')
 

@@ -266,12 +266,12 @@ def handleMicroPub():
                 domain   = baseDomain(me, includeScheme=False)
                 idDomain = baseDomain(cfg.client_id, includeScheme=False)
                 if domain == idDomain and checkAccessToken(access_token):
-                    data = { 'event':    'create',
-                             'domain':   domain,
-                             'baseurl':  cfg.baseurl,
-                             'basepath': cfg.baseroute,
-                             'app':      client_id,
-                             'scope':    scope
+                    data = { 'event':     'create',
+                             'domain':    domain,
+                             'baseurl':   cfg.baseurl,
+                             'baseroute': cfg.baseroute,
+                             'app':       client_id,
+                             'scope':     scope
                            }
                     for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
                                 'category', 'slug', 'location', 'syndication', 'syndicate-to',

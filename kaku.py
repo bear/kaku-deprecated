@@ -12,6 +12,7 @@ require javascript somewhere on the site.
 import os
 import sys
 import uuid
+import json
 import urllib
 import logging
 
@@ -20,10 +21,10 @@ import redis
 import requests
 
 from logging.handlers import RotatingFileHandler
-from urlparse import ParseResult
+from urlparse import ParseResult, urlparse
 from bearlib.config import Config
 from bearlib.tools import baseDomain
-from flask import Flask, request, redirect, render_template, session
+from flask import Flask, request, redirect, render_template, session, jsonify, Response
 from flask.ext.wtf import Form
 from wtforms import TextField, HiddenField
 from wtforms.validators import Required
@@ -382,6 +383,109 @@ def handleWebmention():
                 return 'invalid post', 404
         else:
             return 'invalid post', 404
+
+_xml_response = """<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<oembed>
+  <version>%(version)s</version>
+  <type>%(type)s</type>
+  <author_name>%(author_name)s</author_name>
+  <author_url>%(author_url)s</author_url>
+  <cache_age>86400</cache_age>
+  <provider_name>%(provider_name)s</provider_name>
+  <provider_url>%(provider_url)s</provider_url>
+  <html>%(html)s</html>
+</oembed>
+"""
+_embed_html = """<blockquote class="h-entry">
+  <p>
+    <a class="p-author h-card" href="%(author_url)s">
+      <img src="%(thumbnail_url)s" height="%(thumbnail_height)s" width="%(thumbnail_width)s" alt="%(author_name)s"/>
+    </a>
+    <a class="u-url" href="%(target)s">%(title)s</a>
+  </p>
+</blockquote>
+"""
+_thumbnails = (
+    ("/images/bear_apple-icon-57x57.png",     57),
+    ("/images/bear_apple-icon-60x60.png",     60),
+    ("/images/bear_apple-icon-72x72.png",     72),
+    ("/images/bear_apple-icon-76x76.png",     76),
+    ("/images/bear_apple-icon-114x114.png",   114),
+    ("/images/bear_apple-icon-120x120.png",   120),
+    ("/images/bear_128x128.jpg",              128),
+    ("/images/bear_apple-icon-144x144.png",   144),
+    ("/images/bear_apple-icon-152x152.png",   152),
+    ("/images/bear_apple-icon-180x180.png",   180),
+    ("/images/bear_android-icon-192x192.png", 192),
+)
+
+def findThumbnail(maxWidth, maxHeight):
+    if maxWidth is None:
+        maxWidth = 72
+    if maxHeight is None:
+        maxHeight = 72
+    key    = min(maxWidth, maxHeight)
+    result = _thumbnails[0]
+    for u, v in _thumbnails:
+        if v <= key:
+            result = (u, v)
+        else:
+            break
+    return result
+
+@app.route('/oembed', methods=['GET'])
+def handleEmbed():
+    app.logger.info('handleEmbed')
+
+    targetURL      = request.args.get('url')
+    responseFormat = request.args.get('format')
+    maxWidth       = request.args.get('maxwidth')
+    maxHeight      = request.args.get('maxheight')
+    if responseFormat is None:
+        responseFormat = 'json'
+    responseFormat = responseFormat.lower()
+
+    if targetURL is None:
+        return 'invalid url', 404
+    else:
+        siteCfg = Config()
+        if os.path.exists(cfg.site_config):
+            siteCfg.fromJson(cfg.site_config)
+
+        url         = urlparse(targetURL)
+        targetRoute = url.path.replace(siteCfg.baseroute, '')
+        if targetRoute.endswith('.html'):
+            targetRoute = targetRoute[:-5]
+        targetFile = os.path.join(siteCfg.paths.content, '%s.json' % targetRoute)
+        print targetURL
+        print url
+        print targetRoute
+        print targetFile
+        # load all known mentions for the target
+        if os.path.exists(targetFile):
+            with open(targetFile, 'r') as h:
+                post = json.load(h)
+
+        thumbUrl, thumbWidth = findThumbnail(maxWidth, maxHeight)
+        data = {
+            "version":          "1.0",
+            "type":             "rich",
+            "author_name":      post['author'],
+            "author_url":       siteCfg.baseurl,
+            "provider_name":    baseDomain(siteCfg.baseurl, includeScheme=False),
+            "provider_url":     siteCfg.baseurl,
+            "title":            post['title'],
+            "thumbnail_url":    '%s%s' % (siteCfg.baseurl, thumbUrl),
+            "thumbnail_width":  thumbWidth,
+            "thumbnail_height": thumbWidth,
+            "target":           targetURL
+        }
+        data['html'] = _embed_html % data
+
+        if responseFormat == 'json':
+            return jsonify(data)
+        else:
+            return Response(_xml_response % data, mimetype='text/xml')
 
 def initLogging(logger, logpath=None, echo=False):
     logFormatter = logging.Formatter("%(asctime)s %(levelname)-9s %(message)s", "%Y-%m-%d %H:%M:%S")

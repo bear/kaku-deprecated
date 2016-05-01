@@ -51,20 +51,13 @@ class TokenForm(Form):
     client_id    = TextField('client_id', validators=[])
     state        = TextField('state', validators=[])
 
-
 # check for uwsgi, use PWD if present or getcwd() if not
-_uwsgi = __name__.startswith('uwsgi')
+_uwsgi = __name__.startswith('uwsgi') or 'UWSGI_ORIGINAL_PROC_NAME' in os.environ.keys()
 if _uwsgi:
-    # TODO: need to find a better way - both / and . are replaced with _ for paths
-    #       which can generate bad paths with the simplistic replace i'm doing below
-    _ourPath    = os.path.dirname(__name__.replace('uwsgi_file_', '').replace('_', '/'))
-    _configFile = '/etc/kaku.cfg'
-    if not os.path.exists('/etc/kaku.cfg'):
-        _configFile = os.path.join(_ourPath, 'kaku.cfg')
-    sys.path.append(_ourPath)
+    _ourPath = os.path.dirname(__name__.replace('uwsgi_file_', '').replace('_', '/'))
 else:
-    _ourPath    = os.getcwd()
-    _configFile = os.path.join(_ourPath, 'kaku.cfg')
+    _ourPath = os.getcwd()
+_configFile = os.path.join(_ourPath, 'kaku.cfg')
 
 # uwsgi apps do not have their current working directory set (that I know of)
 # to anything anywhere near the application so these are done at this point

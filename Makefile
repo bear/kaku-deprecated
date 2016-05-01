@@ -1,24 +1,54 @@
-
+.PHONY: help clean install install-hook install-uwsgi install-dev info server uwsgi
 
 help:
-	@echo "  deps        install dependencies"
-	@echo "  clean       remove unwanted stuff"
-	@echo "  lint        check style with flake8"
-	@echo "  local       run kaku in Flask's debug mode with the local config file"
+	@echo "This project assumes that an active Python virtualenv is present."
+	@echo "The following make targets are available:"
+	@echo "  install     install dependencies"
+	@echo "  clean       remove unwanted files"
+	@echo "  lint        flake8 lint check"
+	@echo "  test        run unit tests"
 
-deps:
-	pip install -r requirements.txt --use-mirrors
+
+install-hook:
+	git-pre-commit-hook install --force --plugins json --plugins yaml --plugins flake8 \
+                              --flake8_ignore E111,E124,E126,E201,E202,E221,E241,E302,E501,N802,N803
+
+install-uwsgi:
+	pip install uwsgi
+
+install:
+	pip install -Ur requirements.txt
+
+install-dev: install
+	pip install -Ur requirements-test.txt
 
 clean:
-	rm -fr build
-	rm -fr dist
-	find . -name '*.pyc' -exec rm -f {} \;
-	find . -name '*.pyo' -exec rm -f {} \;
-	find . -name '*~' -exec rm -f {} \;
+	@rm -f violations.flake8.txt
+	python manage.py clean
 
-lint:
-	flake8 . > violations.flake8.txt
+lint: clean
+	flake8 --exclude=env --exclude=archive . > violations.flake8.txt
 
-local:
-	@echo "make sure Redis is running..."
-	python kaku.py --logpath . --port 9999 --host 127.0.0.1 --config ./kaku.cfg
+test: lint
+	python manage.py test
+
+coverage: lint
+	@coverage run --source=kaku manage.py test
+	@coverage html
+	@coverage report
+
+info:
+	@uname -a
+	@pyenv --version
+	@pip --version
+	@python --version
+	@pyenv version
+
+ci: info coverage
+	CODECOV_TOKEN=`cat .codecov-token` codecov
+
+server:
+	python manage.py server
+
+uwsgi:
+	uwsgi --socket 127.0.0.1:5080 --module service --callable application

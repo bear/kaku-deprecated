@@ -69,6 +69,7 @@ def handleLogin():
         current_app.logger.info('me [%s]' % form.me.data)
 
         me            = 'https://%s/' % baseDomain(form.me.data, includeScheme=False)
+        scope         = ''
         authEndpoints = ninka.indieauth.discoverAuthEndpoints(me)
 
         if 'authorization_endpoint' in authEndpoints:
@@ -77,6 +78,8 @@ def handleLogin():
                 authURL = url
                 break
             if authURL is not None:
+                if me == current_app.config['BASEURL']:
+                    scope = 'post update delete'
                 url = ParseResult(authURL.scheme,
                                   authURL.netloc,
                                   authURL.path,
@@ -84,7 +87,7 @@ def handleLogin():
                                   urllib.urlencode({ 'me':            me,
                                                      'redirect_uri':  form.redirect_uri.data,
                                                      'client_id':     form.client_id.data,
-                                                     'scope':         'post',
+                                                     'scope':         scope,
                                                      'response_type': 'id'
                                                    }),
                                   authURL.fragment).geturl()
@@ -98,7 +101,7 @@ def handleLogin():
                     current_app.dbRedis.hset(key, 'from_uri',     form.from_uri.data)
                     current_app.dbRedis.hset(key, 'redirect_uri', form.redirect_uri.data)
                     current_app.dbRedis.hset(key, 'client_id',    form.client_id.data)
-                    current_app.dbRedis.hset(key, 'scope',        'post')
+                    current_app.dbRedis.hset(key, 'scope',        scope)
                     current_app.dbRedis.expire(key, current_app.config['AUTH_TIMEOUT'])  # expire in N minutes unless successful
                 current_app.logger.info('redirecting to [%s]' % url)
                 return redirect(url)

@@ -36,7 +36,6 @@ def createSlug(text, delim=u'-'):
     return unicode(delim.join(result))
 
 def micropub(data):
-    # yes, I know, it's a module global...
     try:
         if data['event'] == 'create':
             if 'h' in data:
@@ -59,23 +58,27 @@ def micropub(data):
 
                         filename = os.path.join(current_app.siteConfig.paths.content, year, doy, '%s.md' % slug)
                         if os.path.exists(filename):
-                          return ('Micropub CREATE failed, location already exists', 406)
+                            return ('Micropub CREATE failed, location already exists', 406)
                         else:
-                          mdata = { 'slug':       slug,
-                                    'timestamp':  timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                                    'location':   '%s%s' % (data['baseurl'], location),
-                                    'year':       year,
-                                    'doy':        doy,
-                                    'micropub':   data,
-                                  }
-                          key   = 'micropub::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), slug)
-                          event = { 'type': 'micropub',
-                                    'key':  key,
-                                  }
-                          current_app.dbRedis.set(key, json.dumps(mdata))
-                          current_app.dbRedis.rpush('kaku-events', json.dumps(event))
-                          current_app.dbRedis.publish('kaku', 'update')
-                          return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
+                            mdata = { 'slug':       slug,
+                                      'timestamp':  timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                                      'location':   '%s%s' % (data['baseurl'], location),
+                                      'year':       year,
+                                      'doy':        doy,
+                                      'micropub':   data,
+                                    }
+                            key   = 'micropub::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), slug)
+                            event = { 'type': 'micropub',
+                                      'key':  key,
+                                    }
+
+                            current_app.logger.info('micropub create event for [%s]' % slug)
+                            current_app.logger.info('\n\t'.join(json.dumps(mdata, indent=2).split()))
+
+                            current_app.dbRedis.set(key, json.dumps(mdata))
+                            current_app.dbRedis.rpush('kaku-events', json.dumps(event))
+                            current_app.dbRedis.publish('kaku', 'generate')
+                            return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         current_app.log.exception('Exception during micropub handling')
 

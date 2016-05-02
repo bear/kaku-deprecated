@@ -48,6 +48,8 @@ def checkAccessToken(access_token):
             scope     = data[3]
             current_app.logger.info('access token valid [%s] [%s] [%s]' % (me, client_id, scope))
             return me, client_id, scope
+        else:
+            return None, None, None
     else:
         return None, None, None
 

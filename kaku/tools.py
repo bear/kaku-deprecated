@@ -13,11 +13,6 @@ from urlparse import urlparse
 
 from flask import current_app, session
 
-        # event     = { 'type':    'mention',
-        #               'action': 'deleted',
-        #               'key':     key,
-        #               'data':    {}
-        #             }
 
 def kakuEvent(eventType, eventAction, eventData):
     """Publish a Kaku event.

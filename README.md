@@ -35,6 +35,29 @@ All of the dependencies are outlined in a pip installable '''requirements.txt'''
  KAKU_SETTINGS=/home/bearim/kaku_settings.py uwsgi --socket 127.0.0.1:5000 --module service --callable application
 ```
 
+## Gathering
+
+Included is a small tool I call ```gather``` which, as you would imagine, is used to gather up any changed markdown files found in the content path.
+
+```
+$ python gather.py --help
+usage: gather.py [-h] [--redis REDIS] [--logpath LOGPATH] [--file FILE]
+                 [--path PATH] [--force] [--listen]
+
+optional arguments:
+  -h, --help         show this help message and exit
+  --redis REDIS      The Redis database to connect to as a URL.
+                     Default is redis://127.0.0.1:6379/0
+  --logpath LOGPATH  Where to write the log file output. Default is "."
+  --file FILE        A specific markdown file to check and then exit.
+  --path PATH        A path to scan for changed files.
+  --force            Force any found markdown files (or specific file) to be
+                     considered an update.
+  --listen           Listen for publish events from Redis.
+```
+
+Each file that is determined to be new, updated or deleted will have a Kaku Event generated -- which is fancy talk for it building a json blob and calling Redis ```publish``` on the ```kaku-event``` channel.
+
 ## TODO
 handle the following requests:
 

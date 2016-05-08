@@ -23,16 +23,16 @@ install-dev: install
 	pip install -Ur requirements-test.txt
 
 clean:
-	@rm -f violations.flake8.txt
 	python manage.py clean
 
 lint: clean
+	@rm -f violations.flake8.txt
 	flake8 --exclude=env --exclude=archive . > violations.flake8.txt
 
 test: lint
 	python manage.py test
 
-coverage: lint
+coverage:
 	@coverage run --source=kaku manage.py test
 	@coverage html
 	@coverage report
@@ -42,9 +42,8 @@ info:
 	@pyenv --version
 	@pip --version
 	@python --version
-	@pyenv version
 
-ci: info coverage
+ci: info clean coverage
 	CODECOV_TOKEN=`cat .codecov-token` codecov
 
 server:

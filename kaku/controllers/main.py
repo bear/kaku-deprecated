@@ -9,15 +9,42 @@ import urllib
 import ninka
 import requests
 
-from flask import Blueprint, current_app, request
+from flask import Blueprint, current_app, request, redirect
 
-from kaku.tools import checkAccessToken
+from kaku.tools import checkAccessToken, validURL
 from kaku.micropub import micropub
+from kaku.webmentions import mention
 
 from bearlib.tools import baseDomain
 
 
 main = Blueprint('main', __name__)
+
+@main.route('/webmention', methods=['POST'])
+def handleWebmention():
+    current_app.logger.info('handleWebmention [%s]' % request.method)
+    if request.method == 'POST':
+        valid  = False
+        source = request.form.get('source')
+        target = request.form.get('target')
+        vouch  = request.form.get('vouch')
+        current_app.logger.info('source: %s target: %s vouch %s' % (source, target, vouch))
+        if current_app.config['BASEROUTE'] in target:
+            valid = validURL(target)
+            current_app.logger.info('valid? %s' % valid)
+            if valid == requests.codes.ok:
+                valid, vouched = mention(source, target, vouch)
+                if valid:
+                    return redirect(target)
+                else:
+                    if current_app.config['VOUCH_REQUIRED'] and not vouched:
+                        return 'Vouch required for webmention', 449
+                    else:
+                        return 'Webmention is invalid', 400
+            else:
+                return 'invalid post', 404
+        else:
+            return 'invalid post', 404
 
 @main.route('/micropub', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
 def handleMicroPub():
@@ -37,12 +64,9 @@ def handleMicroPub():
                 domain   = baseDomain(me, includeScheme=False)
                 idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
                 if domain == idDomain and checkAccessToken(access_token):
-                    data = { 'event':     'create',
-                             'domain':    domain,
-                             'baseurl':   current_app.config['BASEURL'],
-                             'baseroute': current_app.config['BASEROUTE'],
-                             'app':       client_id,
-                             'scope':     scope
+                    data = { 'domain': domain,
+                             'app':    client_id,
+                             'scope':  scope
                            }
                     for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
                                 'category', 'slug', 'location', 'syndication', 'syndicate-to',
@@ -53,7 +77,7 @@ def handleMicroPub():
                         if key not in data:
                             data[key] = request.form.get(key)
                             current_app.logger.info('    %s = [%s]' % (key, data[key]))
-                    return micropub(data)
+                    return micropub(request.method, data)
                 else:
                     return 'Unauthorized', 403
         elif request.method == 'GET':

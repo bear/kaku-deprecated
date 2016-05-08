@@ -16,6 +16,8 @@ import pytz
 
 from flask import current_app
 
+from kaku.tools import kakuEvent
+
 
 def buildTemplateContext(cfg):
     result = {}
@@ -29,55 +31,61 @@ def buildTemplateContext(cfg):
 
 # from http://flask.pocoo.org/snippets/5/
 _punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
-def createSlug(text, delim=u'-'):
+def createSlug(title, delim=u'-'):
     result = []
-    for word in _punct_re.split(text.lower()):
+    for word in _punct_re.split(title.lower()):
         result.extend(unidecode(word).split())
     return unicode(delim.join(result))
 
-def micropub(data):
+# TODO: figure out how to make determination of the title configurable
+def determineTitle(mpData, timestamp):
+    summary = ''
+    if 'summary' in mpData and mpData['summary'] is not None:
+        summary = mpData['summary']
+    if len(summary) == 0:
+        if 'content' in mpData and mpData['content'] is not None:
+            summary = mpData['content'].split('\n')[0]
+    if len(summary) == 0:
+        title = 'event-%s' % timestamp.strftime('%H%M%S')
+    else:
+        title = summary
+    return title
+
+# TODO: figure out how to make the calculation of the location configurable
+def generateLocation(timestamp, slug):
+    baseroute = current_app.config['BASEROUTE'],
+    year      = str(timestamp.year)
+    doy       = timestamp.strftime('%j')
+    location  = os.path.join(baseroute, year, doy, slug)
+    return location
+
+def micropub(event, mpData):
     try:
-        if data['event'] == 'create':
-            if 'h' in data:
-                if data['h'].lower() not in ('entry',):
+        if event == 'POST':
+            if 'h' in mpData:
+                if mpData['h'].lower() not in ('entry',):
                     return ('Micropub CREATE requires a valid action parameter', 400, {})
                 else:
                     try:
                         utcdate   = datetime.datetime.utcnow()
                         tzLocal   = pytz.timezone('America/New_York')
                         timestamp = tzLocal.localize(utcdate, is_dst=None)
-
-                        if 'content' in data and data['content'] is not None:
-                            title = data['content'].split('\n')[0]
-                        else:
-                            title = 'event-%s' % timestamp.strftime('%H%M%S')
-                        slug     = createSlug(title)
-                        year     = str(timestamp.year)
-                        doy      = timestamp.strftime('%j')
-                        location = os.path.join(data['baseroute'], year, doy, slug)
-
-                        filename = os.path.join(current_app.siteConfig.paths.content, year, doy, '%s.md' % slug)
-                        if os.path.exists(filename):
+                        title     = determineTitle(mpData)
+                        slug      = createSlug(title)
+                        location  = generateLocation(timestamp, slug)
+                        if os.path.exists(os.path.join(current_app.siteConfig.paths.content, '%s.md' % location)):
                             return ('Micropub CREATE failed, location already exists', 406)
                         else:
-                            mdata = { 'slug':       slug,
-                                      'timestamp':  timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                                      'location':   '%s%s' % (data['baseurl'], location),
-                                      'year':       year,
-                                      'doy':        doy,
-                                      'micropub':   data,
-                                    }
-                            key   = 'micropub::%s::%s' % (timestamp.strftime('%Y%m%d%H%M%S'), slug)
-                            event = { 'type': 'micropub',
-                                      'key':  key,
-                                    }
-
+                            data = { 'slug':      slug,
+                                     'title':     title,
+                                     'location':  location,
+                                     'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                                     'micropub':  mpData,
+                                   }
                             current_app.logger.info('micropub create event for [%s]' % slug)
-                            current_app.logger.info('\n\t'.join(json.dumps(mdata, indent=2).split()))
+                            current_app.logger.info('\n\t'.join(json.dumps(data, indent=2).split()))
+                            kakuEvent('post', 'created', data)
 
-                            current_app.dbRedis.set(key, json.dumps(mdata))
-                            current_app.dbRedis.rpush('kaku-events', json.dumps(event))
-                            current_app.dbRedis.publish('kaku', 'generate')
                             return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                     except Exception:
                         current_app.log.exception('Exception during micropub handling')

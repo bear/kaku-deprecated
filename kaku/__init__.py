@@ -16,7 +16,6 @@ from bearlib.config import Config
 
 from kaku.controllers.main import main
 from kaku.controllers.auth import auth
-from kaku.controllers.webmention import wm
 from kaku.extensions import (
     debug_toolbar,
     cache
@@ -68,7 +67,6 @@ def create_app(object_name):
     # register our blueprints
     app.register_blueprint(main)
     app.register_blueprint(auth)
-    app.register_blueprint(wm)
 
     app.logger.info('Flask app [%s] created' % __name__)
 

@@ -5,12 +5,41 @@
 """
 
 import os
+import json
+import uuid
 import requests
 
 from urlparse import urlparse
 
 from flask import current_app, session
 
+        # event     = { 'type':    'mention',
+        #               'action': 'deleted',
+        #               'key':     key,
+        #               'data':    {}
+        #             }
+
+def kakuEvent(eventType, eventAction, eventData):
+    """Publish a Kaku event.
+
+    A Kaku event is used to allow async handling of events
+    from web requests.
+
+    Event Types: mention, post, login
+    Event Actions: created, updated, deleted
+    Event Data: a dictionary of items relevant to the event
+
+    The event is stored in the location key generated and that
+    key is then published to the event queue.
+    """
+    key  = 'kaku-event::%s::%s::%s' % (eventType, eventAction, str(uuid.uuid4()))
+    data = { 'type':   eventType,
+             'action': eventAction,
+             'data':   eventData,
+             'key':    key
+           }
+    current_app.dbRedis.set(key, json.dumps(data))
+    current_app.dbRedis.publish('kaku', key)
 
 def clearAuth():
     if 'indieauth_token' in session:

@@ -13,7 +13,7 @@ from flask import Blueprint, current_app, request, redirect
 
 from kaku.tools import checkAccessToken, validURL
 from kaku.micropub import micropub
-from kaku.webmentions import mention
+from kaku.mentions import mention
 
 from bearlib.tools import baseDomain
 
@@ -61,25 +61,25 @@ def handleMicroPub():
         return ('Access Token missing', 401, {})
     else:
         if request.method == 'POST':
-                domain   = baseDomain(me, includeScheme=False)
-                idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
-                if domain == idDomain and checkAccessToken(access_token):
-                    data = { 'domain': domain,
-                             'app':    client_id,
-                             'scope':  scope
-                           }
-                    for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
-                                'category', 'slug', 'location', 'syndication', 'syndicate-to',
-                                'in-reply-to', 'repost-of', 'like-of'):
+            domain   = baseDomain(me, includeScheme=False)
+            idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
+            if domain == idDomain and checkAccessToken(access_token):
+                data = { 'domain': domain,
+                         'app':    client_id,
+                         'scope':  scope
+                       }
+                for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
+                            'category', 'slug', 'location', 'syndication', 'syndicate-to',
+                            'in-reply-to', 'repost-of', 'like-of'):
+                    data[key] = request.form.get(key)
+                    current_app.logger.info('    %s = [%s]' % (key, data[key]))
+                for key in request.form.keys():
+                    if key not in data:
                         data[key] = request.form.get(key)
                         current_app.logger.info('    %s = [%s]' % (key, data[key]))
-                    for key in request.form.keys():
-                        if key not in data:
-                            data[key] = request.form.get(key)
-                            current_app.logger.info('    %s = [%s]' % (key, data[key]))
-                    return micropub(request.method, data)
-                else:
-                    return 'Unauthorized', 403
+                return micropub(request.method, data)
+            else:
+                return 'Unauthorized', 403
         elif request.method == 'GET':
             # add support for /micropub?q=syndicate-to
             return 'not implemented', 501

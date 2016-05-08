@@ -6,9 +6,7 @@
 
 import os
 import re
-import json
 import datetime
-import traceback
 
 from unidecode import unidecode
 
@@ -46,58 +44,48 @@ def determineTitle(mpData, timestamp):
         if 'content' in mpData and mpData['content'] is not None:
             summary = mpData['content'].split('\n')[0]
     if len(summary) == 0:
-        title = 'event-%s' % timestamp.strftime('%H%M%S')
+        title = 'micropub post %s' % timestamp.strftime('%H%M%S')
     else:
         title = summary
     return title
 
 # TODO: figure out how to make the calculation of the location configurable
 def generateLocation(timestamp, slug):
-    baseroute = current_app.config['BASEROUTE'],
+    baseroute = current_app.config['BASEROUTE']
     year      = str(timestamp.year)
     doy       = timestamp.strftime('%j')
     location  = os.path.join(baseroute, year, doy, slug)
     return location
 
 def micropub(event, mpData):
-    try:
-        if event == 'POST':
-            if 'h' in mpData:
-                if mpData['h'].lower() not in ('entry',):
-                    return ('Micropub CREATE requires a valid action parameter', 400, {})
-                else:
-                    try:
-                        utcdate   = datetime.datetime.utcnow()
-                        tzLocal   = pytz.timezone('America/New_York')
-                        timestamp = tzLocal.localize(utcdate, is_dst=None)
-                        title     = determineTitle(mpData)
-                        slug      = createSlug(title)
-                        location  = generateLocation(timestamp, slug)
-                        if os.path.exists(os.path.join(current_app.siteConfig.paths.content, '%s.md' % location)):
-                            return ('Micropub CREATE failed, location already exists', 406)
-                        else:
-                            data = { 'slug':      slug,
-                                     'title':     title,
-                                     'location':  location,
-                                     'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                                     'micropub':  mpData,
-                                   }
-                            current_app.logger.info('micropub create event for [%s]' % slug)
-                            current_app.logger.info('\n\t'.join(json.dumps(data, indent=2).split()))
-                            kakuEvent('post', 'created', data)
-
-                            return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
-                    except Exception:
-                        current_app.log.exception('Exception during micropub handling')
-
-                    return ('Micropub CREATE failed', 500, {})
+    if event == 'POST':
+        if 'h' in mpData:
+            if mpData['h'].lower() not in ('entry',):
+                return ('Micropub CREATE requires a valid action parameter', 400, {})
             else:
-                return ('Invalid Micropub CREATE request', 400, {})
+                try:
+                    utcdate   = datetime.datetime.utcnow()
+                    tzLocal   = pytz.timezone('America/New_York')
+                    timestamp = tzLocal.localize(utcdate, is_dst=None)
+                    title     = determineTitle(mpData, timestamp)
+                    slug      = createSlug(title)
+                    location  = generateLocation(timestamp, slug)
+                    if os.path.exists(os.path.join(current_app.siteConfig.paths.content, '%s.md' % location)):
+                        return ('Micropub CREATE failed, location already exists', 406)
+                    else:
+                        data = { 'slug':      slug,
+                                 'title':     title,
+                                 'location':  location,
+                                 'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                                 'micropub':  mpData,
+                               }
+                        current_app.logger.info('micropub create event for [%s]' % slug)
+                        kakuEvent('post', 'created', data)
+                        return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
+                except:
+                    current_app.logger.exception('Exception during micropub handling')
+                    return ('Unable to process Micropub', 400, {})
         else:
-            return ('Unable to process Micropub %s' % data['event'], 400, {})
-    except:
-        pass
-
-    # should only get here if an exception has occurred
-    traceback.print_exc()
-    return ('Unable to process Micropub', 400, {})
+            return ('Invalid Micropub CREATE request', 400, {})
+    else:
+        return ('Unable to process Micropub %s' % data['event'], 400, {})

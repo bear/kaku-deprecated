@@ -34,7 +34,7 @@ def kakuEvent(eventType, eventAction, eventData):
              'key':    key
            }
     current_app.dbRedis.set(key, json.dumps(data))
-    current_app.dbRedis.publish('kaku', key)
+    current_app.dbRedis.publish(current_app.config['SITE_EVENTS'], key)
 
 def clearAuth():
     if 'indieauth_token' in session:

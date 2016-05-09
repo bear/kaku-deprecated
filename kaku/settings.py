@@ -22,8 +22,9 @@ class Config(object):
     CACHE_NO_NULL_WARNING = True
     LANGUAGES      = { 'en': 'English'
                      }
-    SITE_CONFIG    = 'kaku.cfg'
+    SITE_CONTENT   = None
     SITE_TEMPLATES = None
+    SITE_EVENTS    = 'kaku-events'
     LOG_FILE       = os.path.join(_cwd, 'kaku.log')
 
 class ProdConfig(Config):

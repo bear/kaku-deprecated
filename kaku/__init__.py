@@ -12,8 +12,6 @@ from flask import Flask
 from flask.ext.redis import FlaskRedis
 from redis import StrictRedis
 
-from bearlib.config import Config
-
 from kaku.controllers.main import main
 from kaku.controllers.auth import auth
 from kaku.extensions import (
@@ -58,9 +56,6 @@ def create_app(object_name):
 
     # initialize the debug tool bar
     debug_toolbar.init_app(app)
-
-    app.siteConfig = Config()
-    app.siteConfig.fromJson(app.config['SITE_CONFIG'])
 
     app.dbRedis = FlaskRedis.from_custom_provider(StrictRedis, app)
 

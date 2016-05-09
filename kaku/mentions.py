@@ -18,7 +18,7 @@ from mf2py.parser import Parser
 from kaku.tools import kakuEvent, extractHCard
 
 
-def processVouch(sourceURL, targetURL, siteConfig, vouchDomain):
+def processVouch(sourceURL, targetURL, vouchDomain):
     """Determine if the vouch domain is valid.
 
     This implements a very simple method for determining if a vouch should
@@ -29,7 +29,7 @@ def processVouch(sourceURL, targetURL, siteConfig, vouchDomain):
     """
     result       = False
     vouchDomains = []
-    vouchFile    = os.path.join(siteConfig.paths.content, 'vouch_domains.txt')
+    vouchFile    = os.path.join(current_app.config['SITE_CONTENT'], 'vouch_domains.txt')
     if os.isfile(vouchFile):
         with open(vouchFile, 'r') as h:
             for domain in h.readlines():
@@ -91,7 +91,7 @@ def mention(sourceURL, targetURL, vouchDomain=None):
                         vouched = False
                         result  = False
                     else:
-                        vouched = processVouch(current_app.siteConfig.paths.content, sourceURL, targetURL, vouchDomain)
+                        vouched = processVouch(sourceURL, targetURL, vouchDomain)
                         result  = vouched
                 else:
                     vouched = False
@@ -113,7 +113,7 @@ def mention(sourceURL, targetURL, vouchDomain=None):
                                 }
                     current_app.logger.info('mention created for [%s] from [%s]' % (targetURL, sourceURL))
                     current_app.logger.info('\n\t'.join(json.dumps(data, indent=2)))
-                    kakuEvent('mention', 'created', data)
+                    kakuEvent('mention', 'create', data)
 
     current_app.logger.info('mention() returning %s' % result)
     return result, vouched

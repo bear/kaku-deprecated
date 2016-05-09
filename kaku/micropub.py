@@ -59,7 +59,7 @@ def generateLocation(timestamp, slug):
 
 def micropub(event, mpData):
     if event == 'POST':
-        if 'h' in mpData:
+        if 'h' in mpData and mpData['h'] is not None:
             if mpData['h'].lower() not in ('entry',):
                 return ('Micropub CREATE requires a valid action parameter', 400, {})
             else:
@@ -70,7 +70,7 @@ def micropub(event, mpData):
                     title     = determineTitle(mpData, timestamp)
                     slug      = createSlug(title)
                     location  = generateLocation(timestamp, slug)
-                    if os.path.exists(os.path.join(current_app.siteConfig.paths.content, '%s.md' % location)):
+                    if os.path.exists(os.path.join(current_app.config['SITE_CONTENT'], '%s.md' % location)):
                         return ('Micropub CREATE failed, location already exists', 406)
                     else:
                         data = { 'slug':      slug,
@@ -80,11 +80,24 @@ def micropub(event, mpData):
                                  'micropub':  mpData,
                                }
                         current_app.logger.info('micropub create event for [%s]' % slug)
-                        kakuEvent('post', 'created', data)
+                        kakuEvent('post', 'create', data)
                         return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                 except:
                     current_app.logger.exception('Exception during micropub handling')
-                    return ('Unable to process Micropub', 400, {})
+                    return ('Unable to process Micropub request', 400, {})
+        elif 'mp-action' in mpData and mpData['mp-action'] is not None:
+            action = mpData['mp-action'].lower()
+            if action in ('delete', 'undelete'):
+                if 'url' in mpData and mpData['url'] is not None:
+                    try:
+                        data = { 'url': mpData['url'] }
+                        kakuEvent('post', action, data)
+                        return ('Micropub %s successful for %s' % (action, mpData['url']), 202, {'Location': mpData['url']})
+                    except:
+                        current_app.logger.exception('Exception during micropub handling')
+                        return ('Unable to process Micropub request', 400, {})
+                else:
+                    return ('Micropub %s request requires a URL' % action, 400, {})
         else:
             return ('Invalid Micropub CREATE request', 400, {})
     else:

@@ -59,15 +59,18 @@ def generateLocation(timestamp, slug):
 
 def micropub(event, mpData):
     if event == 'POST':
-        if 'h' in mpData and mpData['h'] is not None:
-            if mpData['h'].lower() not in ('entry',):
+        properties = mpData['properties']
+        if 'h' in properties and properties['h'] is not None:
+            if properties['h'].lower() not in ('entry',):
                 return ('Micropub CREATE requires a valid action parameter', 400, {})
+            elif properties['content'] is None:
+                return ('Micropub CREATE requires a content property', 400, {})
             else:
                 try:
                     utcdate   = datetime.datetime.utcnow()
                     tzLocal   = pytz.timezone('America/New_York')
                     timestamp = tzLocal.localize(utcdate, is_dst=None)
-                    title     = determineTitle(mpData, timestamp)
+                    title     = determineTitle(properties, timestamp)
                     slug      = createSlug(title)
                     location  = generateLocation(timestamp, slug)
                     if os.path.exists(os.path.join(current_app.config['SITE_CONTENT'], '%s.md' % location)):
@@ -77,7 +80,7 @@ def micropub(event, mpData):
                                  'title':     title,
                                  'location':  location,
                                  'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                                 'micropub':  mpData,
+                                 'micropub':  properties,
                                }
                         current_app.logger.info('micropub create event for [%s]' % slug)
                         kakuEvent('post', 'create', data)
@@ -85,14 +88,15 @@ def micropub(event, mpData):
                 except:
                     current_app.logger.exception('Exception during micropub handling')
                     return ('Unable to process Micropub request', 400, {})
-        elif 'mp-action' in mpData and mpData['mp-action'] is not None:
-            action = mpData['mp-action'].lower()
+        elif 'mp-action' in properties and properties['mp-action'] is not None:
+            action = properties['mp-action'].lower()
             if action in ('delete', 'undelete'):
-                if 'url' in mpData and mpData['url'] is not None:
+                if 'url' in properties and properties['url'] is not None:
+                    url = properties['url']
                     try:
-                        data = { 'url': mpData['url'] }
+                        data = { 'url': url }
                         kakuEvent('post', action, data)
-                        return ('Micropub %s successful for %s' % (action, mpData['url']), 202, {'Location': mpData['url']})
+                        return ('Micropub %s successful for %s' % (action, url), 202, {'Location': url})
                     except:
                         current_app.logger.exception('Exception during micropub handling')
                         return ('Unable to process Micropub request', 400, {})

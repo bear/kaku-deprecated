@@ -64,19 +64,23 @@ def handleMicroPub():
             domain   = baseDomain(me, includeScheme=False)
             idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
             if domain == idDomain and checkAccessToken(access_token):
-                data = { 'domain': domain,
-                         'app':    client_id,
-                         'scope':  scope
-                       }
+                properties = {}
                 for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
-                            'category', 'slug', 'location', 'syndication', 'syndicate-to',
-                            'in-reply-to', 'repost-of', 'like-of'):
-                    data[key] = request.form.get(key)
-                    current_app.logger.info('    %s = [%s]' % (key, data[key]))
+                            'slug', 'location', 'syndication', 'syndicate-to',
+                            'in-reply-to', 'repost-of', 'like-of', 'bookmark-of'):
+                    properties[key] = request.form.get(key)
                 for key in request.form.keys():
-                    if key not in data:
-                        data[key] = request.form.get(key)
-                        current_app.logger.info('    %s = [%s]' % (key, data[key]))
+                    if key.lower().startswith('mp-'):
+                        properties[key.lower()] = request.form.get(key)
+                properties['category'] = request.form.getlist('category[]')
+                properties['html']     = request.form.getlist('content[html]')
+                for key in properties:
+                    current_app.logger.info('    %s = [%s]' % (key, properties[key]))
+                data = { 'domain':     domain,
+                         'app':        client_id,
+                         'scope':      scope,
+                         'properties': properties
+                       }
                 return micropub(request.method, data)
             else:
                 return 'Unauthorized', 403

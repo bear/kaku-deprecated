@@ -371,11 +371,16 @@ def checkPost(targetFile, eventData):
             if summary is None or len(summary) == 0:
                 summary = content[0]
                 content = content[1:]
+            # location    = "geo:40.0958,-74.90736;u=92"
+            # in-reply-to = "https://bear.im/bearlog/2016/123/testing-delete.html"
+            # bookmark-of = "https://bear.im"
+            # category    = [u'code', u'indieweb']
+            # html        = [u'<p>something</p><p class="">line2</p><p class="">line3<br></p><p class=""><br></p>']
             data = { 'created':   eventData['timestamp'],
                      'published': eventData['timestamp'],
                      'slug':      eventData['slug'],
                      'author':    'bear',
-                     'tags':      micropub['category'],
+                     'tags':      ','.join(micropub['category']),
                      'content':   '\n'.join(content),
                      'title':     eventData['title'],
                      'summary':   summary,

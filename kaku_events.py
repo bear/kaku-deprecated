@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 :copyright: (c) 2013-2016 by Mike Taylor
-:license: MIT, see LICENSE for more details.
+:license: CC0 1.0 Universal, see LICENSE for more details.
 """
 
 import os
@@ -29,7 +29,7 @@ from bearlib.config import Config, findConfigFile
 from bearlib.tools import normalizeFilename
 
 
-logger = logging.getLogger('generate')
+logger = logging.getLogger(__name__)
 
 def getTimestamp():
     utcdate   = datetime.datetime.utcnow()
@@ -616,7 +616,6 @@ def getRedis(redisURL):
         db = 0
     return redis.StrictRedis(host=host, port=port, db=db)
 
-#
 # Example config file
 # {
 #     "baseroute":  "/bearlog/",

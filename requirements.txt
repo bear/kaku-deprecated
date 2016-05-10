@@ -12,7 +12,7 @@ html5lib>=0.9999999
 MarkupSafe>=0.23
 markdown2==2.3.1
 python-dateutil>=2.4.2
-uWSGI==2.0.12
+uWSGI==2.0.13
 
 Flask>=0.10.1
 

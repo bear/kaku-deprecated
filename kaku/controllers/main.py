@@ -5,7 +5,6 @@
 """
 import uuid
 import urllib
-import datetime
 
 import ninka
 import requests
@@ -216,7 +215,6 @@ def handleAccessToken():
             data = current_app.dbRedis.hgetall(key)
             if data:
                 current_app.logger.info('calling [%s] to validate code' % data['auth_url'])
-                print datetime.datetime.now()
                 r = ninka.indieauth.validateAuthCode(code=code,
                                                      client_id=data['client_id'],
                                                      redirect_uri=data['redirect_uri'],
@@ -231,7 +229,6 @@ def handleAccessToken():
                     current_app.dbRedis.expire(key, current_app.config['AUTH_TIMEOUT'])
                     current_app.dbRedis.set('token-%s' % token, key)
                     current_app.dbRedis.expire('token-%s' % code, current_app.config['AUTH_TIMEOUT'])
-
                     return 'Access Token: %s' % token, 200
                 else:
                     current_app.logger.info('login invalid')
@@ -239,4 +236,5 @@ def handleAccessToken():
                     return 'Invalid', 401
             else:
                 current_app.logger.info('nothing found for [%s]' % me)
+                clearAuth()
                 return 'Invalid', 401

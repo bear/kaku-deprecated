@@ -6,7 +6,6 @@
 
 import uuid
 import urllib
-import datetime
 
 import requests
 import ninka
@@ -120,7 +119,6 @@ def handleLoginSuccess():
         data = current_app.dbRedis.hgetall(key)
         if data:
             current_app.logger.info('calling [%s] to validate code' % data['auth_url'])
-            print datetime.datetime.now()
             r = ninka.indieauth.validateAuthCode(code=code,
                                                  client_id=data['client_id'],
                                                  redirect_uri=data['redirect_uri'],

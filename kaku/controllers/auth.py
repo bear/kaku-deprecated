@@ -37,13 +37,6 @@ class PubishForm(Form):
     inreplyto    = TextField('in-reply-to', validators=[])
     syndicateto  = TextField('syndicate-to', validators=[])
 
-class TokenForm(Form):
-    code         = TextField('code', validators=[])
-    me           = TextField('me', validators=[])
-    redirect_uri = TextField('redirect_uri', validators=[])
-    client_id    = TextField('client_id', validators=[])
-    state        = TextField('state', validators=[])
-
 
 @auth.route('/logout', methods=['GET'])
 def handleLogout():

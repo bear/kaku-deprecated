@@ -5,13 +5,16 @@
 """
 import uuid
 import urllib
+import datetime
 
 import ninka
 import requests
 
-from flask import Blueprint, current_app, request, redirect
-
-from kaku.tools import checkAccessToken, validURL
+from flask import Blueprint, current_app, request, redirect, render_template
+from flask.ext.wtf import Form
+from wtforms import TextField, HiddenField
+from urlparse import ParseResult
+from kaku.tools import checkAccessToken, validURL, clearAuth
 from kaku.micropub import micropub
 from kaku.mentions import mention
 
@@ -19,6 +22,13 @@ from bearlib.tools import baseDomain
 
 
 main = Blueprint('main', __name__)
+
+class MPTokenForm(Form):
+    me           = TextField('me', validators=[])
+    scope        = TextField('scope', validators=[])
+    redirect_uri = HiddenField('redirect_uri', validators=[])
+    client_id    = HiddenField('client_id', validators=[])
+    state        = HiddenField('state', validators=[])
 
 @main.route('/webmention', methods=['POST'])
 def handleWebmention():
@@ -144,3 +154,89 @@ def handleToken():
                        'access_token': token
                      }
             return (urllib.urlencode(params), 200, {'Content-Type': 'application/x-www-form-urlencoded'})
+
+@main.route('/access', methods=['GET', 'POST'])
+def handleAccessToken():
+    current_app.logger.info('handleAccessToken [%s]' % request.method)
+
+    form = MPTokenForm(me=current_app.config['BASEURL'],
+                       client_id=current_app.config['CLIENT_ID'],
+                       redirect_uri='%s/access' % current_app.config['BASEURL'],
+                       from_uri='%s/access' % current_app.config['BASEURL'],
+                       scope='post')
+
+    if form.validate_on_submit():
+        me            = 'https://%s/' % baseDomain(form.me.data, includeScheme=False)
+        authEndpoints = ninka.indieauth.discoverAuthEndpoints(me)
+
+        if 'authorization_endpoint' in authEndpoints:
+            authURL = None
+            for url in authEndpoints['authorization_endpoint']:
+                authURL = url
+                break
+            if authURL is not None:
+                url = ParseResult(authURL.scheme,
+                                  authURL.netloc,
+                                  authURL.path,
+                                  authURL.params,
+                                  urllib.urlencode({ 'me':            me,
+                                                     'redirect_uri':  form.redirect_uri.data,
+                                                     'client_id':     form.client_id.data,
+                                                     'scope':         form.scope.data,
+                                                     'response_type': 'id'
+                                                   }),
+                                  authURL.fragment).geturl()
+
+                key  = 'access-%s' % me
+                data = current_app.dbRedis.hgetall(key)
+                if data and 'token' in data:  # clear any existing auth data
+                    current_app.dbRedis.delete('token-%s' % data['token'])
+                    current_app.dbRedis.hdel(key, 'token')
+                current_app.dbRedis.hset(key, 'auth_url',     ParseResult(authURL.scheme, authURL.netloc, authURL.path, '', '', '').geturl())
+                current_app.dbRedis.hset(key, 'redirect_uri', form.redirect_uri.data)
+                current_app.dbRedis.hset(key, 'client_id',    form.client_id.data)
+                current_app.dbRedis.hset(key, 'scope',        form.scope.data)
+                current_app.dbRedis.expire(key, current_app.config['AUTH_TIMEOUT'])  # expire in N minutes unless successful
+                current_app.logger.info('redirecting to [%s]' % url)
+                return redirect(url)
+        else:
+            return 'insert fancy no auth endpoint found error message here', 403
+    else:
+        me    = request.args.get('me')
+        code  = request.args.get('code')
+        current_app.logger.info('me [%s] code [%s]' % (me, code))
+
+        if code is None:
+            templateContext = {}
+            templateContext['form'] = form
+            return render_template('mptoken.jinja', **templateContext)
+        else:
+            current_app.logger.info('getting data to validate auth code')
+            key  = 'access-%s' % me
+            data = current_app.dbRedis.hgetall(key)
+            if data:
+                current_app.logger.info('calling [%s] to validate code' % data['auth_url'])
+                print datetime.datetime.now()
+                r = ninka.indieauth.validateAuthCode(code=code,
+                                                     client_id=data['client_id'],
+                                                     redirect_uri=data['redirect_uri'],
+                                                     validationEndpoint=data['auth_url'])
+                current_app.logger.info('validateAuthCode returned %s' % r['status'])
+                if r['status'] == requests.codes.ok:
+                    current_app.logger.info('login code verified')
+                    token = str(uuid.uuid4())
+
+                    current_app.dbRedis.hset(key, 'code',  code)
+                    current_app.dbRedis.hset(key, 'token', token)
+                    current_app.dbRedis.expire(key, current_app.config['AUTH_TIMEOUT'])
+                    current_app.dbRedis.set('token-%s' % token, key)
+                    current_app.dbRedis.expire('token-%s' % code, current_app.config['AUTH_TIMEOUT'])
+
+                    return 'Access Token: %s' % token, 200
+                else:
+                    current_app.logger.info('login invalid')
+                    clearAuth()
+                    return 'Invalid', 401
+            else:
+                current_app.logger.info('nothing found for [%s]' % me)
+                return 'Invalid', 401

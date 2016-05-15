@@ -1,0 +1,10 @@
+{% extends "base.jinja" %}
+{% block content %}
+<h1>Access Token Request</h1>
+<form action="" method="post" name="access">
+    domain: {{form.me(size=20)}}
+    scope:  {{form.scope(size=20)}}
+    {{form.hidden_tag()}}
+    <p><button type="submit">Request Token</button></p>
+</form>
+{% endblock content %}

@@ -266,7 +266,7 @@ def checkOutboundWebmentions(sourceURL, html, targetFile, update=False):
     except:
         logger.exception('exception during checkOutboundWebmentions')
 
-def postUpdate(targetFile, action):
+def postUpdate(targetFile, action=None):
     """Generate data for targeted file.
 
     All mentions to the post are checked for updates.
@@ -402,11 +402,19 @@ def mentionDelete(mention):
 def mentionUpdate(mention):
     logger.info('mention update of [%s] within [%s]' % (mention['targetURL'], mention['sourceURL']))
 
+    targetPath = urlparse(mention['targetURL'].strip()).path
+    pathItems  = targetPath.split('.')
+    logger.info('[%s] %s' % (targetPath, pathItems))
+    if pathItems[-1].lower() == 'html':
+        targetPath = '.'.join(pathItems[:-1])
+
     eventDate   = getTimestamp()
     sourceURL   = urlparse(mention['sourceURL'])
-    targetURL   = urlparse(mention['targetURL'])
-    targetRoute = targetURL.path.replace(cfg.baseroute, '')
+    targetRoute = targetPath.replace(cfg.baseroute, '')
     targetFile  = os.path.join(cfg.paths.content, targetRoute)
+
+    logger.info('targetFile [%s]' % targetFile)
+
     ourMentions = loadOurWebmentions(targetFile)
     found       = scanOurMentions(sourceURL, ourMentions)
 

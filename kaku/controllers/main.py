@@ -44,16 +44,16 @@ def handleWebmention():
             if valid == requests.codes.ok:
                 valid, vouched = mention(source, target, vouch)
                 if valid:
-                    return redirect(target)
+                    return ('Webmention created for %s' % target, 201, {'Location': target})
                 else:
                     if current_app.config['VOUCH_REQUIRED'] and not vouched:
                         return 'Vouch required for webmention', 449
                     else:
                         return 'Webmention is invalid', 400
             else:
-                return 'invalid post', 404
+                return 'Webmention target not found', 400
         else:
-            return 'invalid post', 404
+            return 'Webmention target is not valid', 400
 
 @main.route('/micropub', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
 def handleMicroPub():

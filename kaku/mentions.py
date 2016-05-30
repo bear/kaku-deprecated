@@ -71,49 +71,53 @@ def mention(sourceURL, targetURL, vouchDomain=None):
     """
     current_app.logger.info('handling Webmention from %s' % sourceURL)
 
-    mentions = ronkyuu.findMentions(sourceURL)
-    result   = False
-    vouched  = False
-    current_app.logger.info('mentions %s' % mentions)
+    try:
+        result   = False
+        vouched  = False
+        mentions = ronkyuu.findMentions(sourceURL)
+        current_app.logger.info('mentions %s' % mentions)
 
-    if mentions['status'] == 410:
-        data = { 'targetURL': targetURL,
-                 'sourceURL': sourceURL
-               }
-        current_app.logger.info('mention removal event from [%s] of [%s]' % (targetURL, sourceURL))
-        kakuEvent('mention', 'deleted', data)
-    else:
-        for href in mentions['refs']:
-            if href != sourceURL and href == targetURL:
-                current_app.logger.info('post at %s was referenced by %s' % (targetURL, sourceURL))
-                if current_app.config['VOUCH_REQUIRED']:
-                    if vouchDomain is None:
-                        vouched = False
-                        result  = False
+        if mentions['status'] == 410:
+            data = { 'targetURL': targetURL,
+                     'sourceURL': sourceURL
+                   }
+            current_app.logger.info('mention removal event from [%s] of [%s]' % (targetURL, sourceURL))
+            kakuEvent('mention', 'deleted', data)
+        else:
+            for href in mentions['refs']:
+                if href != sourceURL and href == targetURL:
+                    current_app.logger.info('post at %s was referenced by %s' % (targetURL, sourceURL))
+                    if current_app.config['VOUCH_REQUIRED']:
+                        if vouchDomain is None:
+                            vouched = False
+                            result  = False
+                        else:
+                            vouched = processVouch(sourceURL, targetURL, vouchDomain)
+                            result  = vouched
                     else:
-                        vouched = processVouch(sourceURL, targetURL, vouchDomain)
-                        result  = vouched
-                else:
-                    vouched = False
-                    result  = True
+                        vouched = False
+                        result  = True
 
-                if result:
-                    utcdate   = datetime.datetime.utcnow()
-                    tzLocal   = pytz.timezone('America/New_York')
-                    timestamp = tzLocal.localize(utcdate, is_dst=None)
-                    mf2Data   = Parser(doc=mentions['content']).to_dict()
-                    hcard     = extractHCard(mf2Data)
-                    data      = { 'sourceURL':   sourceURL,
-                                  'targetURL':   targetURL,
-                                  'vouchDomain': vouchDomain,
-                                  'vouched':     vouched,
-                                  'postDate':    timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
-                                  'hcard':       hcard,
-                                  'mf2data':     mf2Data,
-                                }
-                    current_app.logger.info('mention created for [%s] from [%s]' % (targetURL, sourceURL))
-                    current_app.logger.info('\n\t'.join(json.dumps(data, indent=2)))
-                    kakuEvent('mention', 'create', data)
+                    if result:
+                        utcdate   = datetime.datetime.utcnow()
+                        tzLocal   = pytz.timezone('America/New_York')
+                        timestamp = tzLocal.localize(utcdate, is_dst=None)
+                        mf2Data   = Parser(doc=mentions['content']).to_dict()
+                        hcard     = extractHCard(mf2Data)
+                        data      = { 'sourceURL':   sourceURL,
+                                      'targetURL':   targetURL,
+                                      'vouchDomain': vouchDomain,
+                                      'vouched':     vouched,
+                                      'postDate':    timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
+                                      'hcard':       hcard,
+                                      'mf2data':     mf2Data,
+                                    }
+                        current_app.logger.info('mention created for [%s] from [%s]' % (targetURL, sourceURL))
+                        current_app.logger.info(json.dumps(data, indent=2))
+                        kakuEvent('mention', 'create', data)
 
-    current_app.logger.info('mention() returning %s' % result)
+        current_app.logger.info('mention() returning %s' % result)
+    except ValueError:
+        current_app.logger.exception('Exception raised during webmention processing')
+        result = False
     return result, vouched

@@ -51,7 +51,7 @@ def handleWebmention():
                     else:
                         return 'Webmention is invalid', 400
             else:
-                return 'Webmention target not found', 400
+                return 'Webmention target was not found', 400
         else:
             return 'Webmention target is not valid', 400
 

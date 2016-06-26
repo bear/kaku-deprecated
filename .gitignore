@@ -29,9 +29,11 @@ pip-log.txt
 
 # Unit test / coverage reports
 .coverage
+.codecov-token
 .tox
 nosetests.xml
 htmlcov
+coverage.xml
 
 # Translations
 *.mo

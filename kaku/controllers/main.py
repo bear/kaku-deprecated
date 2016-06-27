@@ -9,7 +9,7 @@ import urllib
 import ninka
 import requests
 
-from flask import Blueprint, current_app, request, redirect, render_template
+from flask import Blueprint, current_app, request, redirect, render_template, jsonify
 from flask.ext.wtf import Form
 from wtforms import TextField, HiddenField
 from urlparse import ParseResult
@@ -28,6 +28,13 @@ class MPTokenForm(Form):
     redirect_uri = HiddenField('redirect_uri', validators=[])
     client_id    = HiddenField('client_id', validators=[])
     state        = HiddenField('state', validators=[])
+
+def request_wants_json():
+    best = request.accept_mimetypes \
+        .best_match(['application/json', 'text/html'])
+    return best == 'application/json' and \
+        request.accept_mimetypes[best] > \
+        request.accept_mimetypes['text/html']
 
 @main.route('/webmention', methods=['POST'])
 def handleWebmention():
@@ -94,7 +101,19 @@ def handleMicroPub():
             else:
                 return 'Unauthorized', 403
         elif request.method == 'GET':
-            # add support for /micropub?q=syndicate-to
+            q = request.args.get('q')
+            current_app.logger.info('GET q [%s]' % q)
+            if q is not None and q.lower() == 'syndicate-to':
+                if request_wants_json:
+                    resp             = jsonify({ 'syndicate-to': current_app.config['SITE_SYNDICATE'] })
+                    resp.status_code = 200
+                    return resp
+                else:
+                    return ('&'.join(map('syndicate-to[]={0}'.format, map(urllib.quote, current_app.config['SITE_SYNDICATE']))),
+                            200, {'Content-Type': 'application/x-www-form-urlencoded'})
+            else:
+                return 'not implemented', 501
+        else:
             return 'not implemented', 501
 
 @main.route('/token', methods=['POST', 'GET'])

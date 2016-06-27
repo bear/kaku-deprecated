@@ -24,6 +24,7 @@ class Config(object):
                      }
     SITE_CONTENT   = None
     SITE_TEMPLATES = None
+    SITE_SYNDICATE = None
     SITE_EVENTS    = 'kaku-events'
     LOG_FILE       = os.path.join(_cwd, 'kaku.log')
 
@@ -32,6 +33,7 @@ class ProdConfig(Config):
     DEBUG      = False
     CACHE_TYPE = 'redis'
     REDIS_URL  = 'redis://127.0.0.1:6379/4'
+
 
 class DevConfig(Config):
     ENV   = 'dev'

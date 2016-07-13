@@ -4,10 +4,12 @@ help:
 	@echo "This project assumes that an active Python virtualenv is present."
 	@echo "The following make targets are available:"
 	@echo "  install     install dependencies"
+	@echo "  install-dev install development dependencies"
 	@echo "  clean       remove unwanted files"
 	@echo "  lint        flake8 lint check"
 	@echo "  test        run unit tests"
-
+	@echo "  coverage    run code coverage"
+	@echo "  ci          run CI tests"
 
 install-hook:
 	git-pre-commit-hook install --force --plugins json --plugins yaml --plugins flake8 \

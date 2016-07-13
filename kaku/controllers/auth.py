@@ -11,7 +11,7 @@ import requests
 import ninka
 
 from flask import Blueprint, current_app, session, render_template, redirect, request
-from flask.ext.wtf import Form
+from flask_wtf import Form
 from wtforms import TextField, HiddenField
 from wtforms.validators import Required
 

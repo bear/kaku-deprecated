@@ -9,7 +9,7 @@ import logging
 import logging.handlers
 
 from flask import Flask
-from flask.ext.redis import FlaskRedis
+from flask_redis import FlaskRedis
 from redis import StrictRedis
 
 from kaku.controllers.main import main

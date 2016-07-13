@@ -8,8 +8,8 @@
 import os
 import sys
 
-from flask.ext.script import Manager, Server
-from flask.ext.script.commands import Command, ShowUrls, Clean
+from flask_script import Manager, Server
+from flask_script.commands import Command, ShowUrls, Clean
 
 from kaku import create_app
 

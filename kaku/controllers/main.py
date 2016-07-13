@@ -10,7 +10,7 @@ import ninka
 import requests
 
 from flask import Blueprint, current_app, request, redirect, render_template, jsonify
-from flask.ext.wtf import Form
+from flask_wtf import Form
 from wtforms import TextField, HiddenField
 from urlparse import ParseResult
 from kaku.tools import checkAccessToken, validURL, clearAuth

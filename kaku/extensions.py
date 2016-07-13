@@ -4,8 +4,8 @@
 :license: CC0 1.0 Universal, see LICENSE for more details.
 """
 
-from flask.ext.cache import Cache
-from flask.ext.debugtoolbar import DebugToolbarExtension
+from flask_cache import Cache
+from flask_debugtoolbar import DebugToolbarExtension
 
 
 # Setup flask cache

@@ -12,7 +12,6 @@ html5lib
 MarkupSafe
 markdown2
 python-dateutil
-uWSGI
 
 Flask
 

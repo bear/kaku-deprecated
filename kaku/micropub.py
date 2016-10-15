@@ -9,6 +9,7 @@ import re
 import datetime
 
 from unidecode import unidecode
+from urlparse import urlparse
 
 import pytz
 
@@ -36,18 +37,18 @@ def createSlug(title, delim=u'-'):
     return unicode(delim.join(result))
 
 # TODO: figure out how to make determination of the title configurable
-def determineTitle(mpData, timestamp):
-    summary = ''
-    if 'summary' in mpData and mpData['summary'] is not None:
-        summary = mpData['summary']
+def determineSummary(mpData, timestamp):
+    summary   = ''
+    mpSummary = mpData['summary']
+    if len(mpSummary) > 0 and mpSummary[0] is not None:
+        summary = ' '.join(mpData['summary'])
     if len(summary) == 0:
-        if 'content' in mpData and mpData['content'] is not None:
-            summary = mpData['content'].split('\n')[0]
+        if 'content' in mpData and mpData['content'] is not None and len(mpData['content']) > 0:
+            summary           = mpData['content'][0]
+            mpData['content'] = mpData['content'][1:]
     if len(summary) == 0:
-        title = 'micropub post %s' % timestamp.strftime('%H%M%S')
-    else:
-        title = summary
-    return title
+        summary = 'micropub post %s' % timestamp.strftime('%H%M%S')
+    return summary
 
 # TODO: figure out how to make the calculation of the location configurable
 def generateLocation(timestamp, slug):
@@ -60,20 +61,20 @@ def generateLocation(timestamp, slug):
 def micropub(event, mpData):
     if event == 'POST':
         properties = mpData['properties']
-        if 'h' in properties and properties['h'] is not None:
-            if properties['h'].lower() not in ('entry',):
-                return ('Micropub CREATE requires a valid action parameter', 400, {})
-            elif properties['content'] is None:
-                return ('Micropub CREATE requires a content property', 400, {})
-            else:
+        if properties['action'] == 'create':
+            if 'type' in properties and properties['type'] is not None:
+                if properties['type'][0].lower() not in ('entry', 'h-entry'):
+                    return ('Micropub CREATE requires a valid type parameter', 400, {})
+            if 'content' in properties or 'html' in properties:
                 try:
-                    utcdate   = datetime.datetime.utcnow()
-                    tzLocal   = pytz.timezone('America/New_York')
-                    timestamp = tzLocal.localize(utcdate, is_dst=None)
-                    title     = determineTitle(properties, timestamp)
-                    slug      = createSlug(title)
-                    location  = generateLocation(timestamp, slug)
-                    if os.path.exists(os.path.join(current_app.config['SITE_CONTENT'], '%s.md' % location)):
+                    utcdate    = datetime.datetime.utcnow()
+                    tzLocal    = pytz.timezone('America/New_York')
+                    timestamp  = tzLocal.localize(utcdate, is_dst=None)
+                    title      = determineSummary(properties, timestamp)
+                    slug       = createSlug(title)
+                    location   = generateLocation(timestamp, slug)
+                    targetFile = os.path.join(current_app.config['SITE_CONTENT'], '%s.md' % location)
+                    if os.path.exists(targetFile):
                         return ('Micropub CREATE failed, location already exists', 406)
                     else:
                         data = { 'slug':      slug,
@@ -82,12 +83,46 @@ def micropub(event, mpData):
                                  'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                                  'micropub':  properties,
                                }
+                        for key in data:
+                            current_app.logger.info('    %s = %s' % (key, data[key]))
                         current_app.logger.info('micropub create event for [%s]' % slug)
                         kakuEvent('post', 'create', data)
                         return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
                 except:
                     current_app.logger.exception('Exception during micropub handling')
                     return ('Unable to process Micropub request', 400, {})
+            else:
+                return ('Micropub CREATE requires a content or html property', 400, {})
+        elif properties['action'] == 'update':
+            if 'url' not in properties:
+                return ('Micropub UPDATE requires a url property', 400, {})
+            location   = properties['url'].strip()
+            targetPath = urlparse(location).path
+            pathItems  = targetPath.split('.')
+            current_app.logger.info('[%s] %s' % (targetPath, pathItems))
+            if pathItems[-1].lower() == 'html':
+                targetPath = '.'.join(pathItems[:-1])
+            slug       = targetPath.replace(current_app.config['BASEROUTE'], '')
+            targetFile = '%s.md' % os.path.join(current_app.config['SITE_CONTENT'], slug)
+
+            if not os.path.exists(targetFile):
+                return ('Micropub UPDATE failed for %s - location does not exist' % location, 404, {})
+            else:
+                if 'replace' in properties:
+                    try:
+                        data = { 'slug':     slug,
+                                 'url':      location,
+                                 'micropub': properties['replace'],
+                               }
+                        current_app.logger.info('micropub UPDATE (replace) event for [%s]' % slug)
+                        kakuEvent('post', 'update', data)
+                        return ('Micropub UPDATE successful for %s' % location, 202, {'Location': location})
+                    except:
+                        current_app.logger.exception('Exception during micropub handling')
+                        return ('Unable to process Micropub request', 400, {})
+                else:
+                    return ('Micropub UPDATE failed for %s - currently only REPLACE is supported' % location, 406, {})
+
         elif 'mp-action' in properties and properties['mp-action'] is not None:
             action = properties['mp-action'].lower()
             if action in ('delete', 'undelete'):

@@ -361,16 +361,24 @@ def checkPost(targetFile, eventData):
     targetFile: path and filename without extension.
     eventData:  Micropub data to create the post from.
     """
-    if os.path.exists('%s.md' % targetFile):
-        logger.info('checkPost for [%s] - markdown file found, skipping' % targetFile)
-    else:
+    if not os.path.exists('%s.md' % targetFile):
         if 'micropub' in eventData:
             micropub = eventData['micropub']
-            content  = micropub['content'].split('\n')
-            summary  = micropub['summary']
-            if summary is None or len(summary) == 0:
-                summary = content[0]
-                content = content[1:]
+            if 'content' in micropub:
+                content = micropub['content']
+            if 'html' in micropub:
+                content.append(micropub['html'])
+            if 'category' in micropub:
+                categories = ','.join(micropub['category'])
+            else:
+                categories = ''
+            if 'photo' in micropub:
+                for url, alt in micropub['photo']:
+                    if len(alt) > 0:
+                        t = ' alt="%s"' % alt
+                    else:
+                        t = ''
+                    content.append('<img src="%s"%s></img>' % (url, t))
             # location    = "geo:40.0958,-74.90736;u=92"
             # in-reply-to = "https://bear.im/bearlog/2016/123/testing-delete.html"
             # bookmark-of = "https://bear.im"
@@ -380,13 +388,14 @@ def checkPost(targetFile, eventData):
                      'published': eventData['timestamp'],
                      'slug':      eventData['slug'],
                      'author':    'bear',
-                     'tags':      ','.join(micropub['category']),
+                     'tags':      categories,
                      'content':   '\n'.join(content),
                      'title':     eventData['title'],
-                     'summary':   summary,
+                     'summary':   eventData['title'],
                      'year':      eventData['year'],
                      'doy':       eventData['doy'],
                      'uuid':      str(uuid.uuid4()),
+                     'payload':   eventData['micropub'],
                    }
             writeMD(targetFile, data)
         else:
@@ -553,16 +562,29 @@ def handlePost(eventAction, eventData):
                 mkpath(postDir)
         checkPost(targetFile, eventData)
         postUpdate(targetFile, eventAction)
+
     elif eventAction in ('update', 'delete'):
         if 'file' in eventData:
             targetFile = eventData['file']
         else:
             targetURL   = urlparse(eventData['url'])
             targetRoute = targetURL.path.replace(cfg.baseroute, '')
-            targetFile  = os.path.join(cfg.paths.content, targetRoute[1:])
+            targetFile  = os.path.join(cfg.paths.content, targetRoute)
+
+        if eventAction == 'delete':
             with open('%s.deleted' % targetFile, 'a'):
                 os.utime('%s.deleted' % targetFile, None)
+
+        elif eventAction == 'update':
+            micropub        = eventData['micropub']
+            data            = loadMetadata(targetFile)
+            data['content'] = '\n'.join(micropub['content'])
+            if 'category' in micropub:
+                data['tags'] = ','.join(micropub['category'])
+            writeMD(targetFile, data)
+
         postUpdate(targetFile, eventAction)
+
     elif eventAction == 'undelete':
         if 'url' in eventData:
             targetURL   = urlparse(eventData['url'])

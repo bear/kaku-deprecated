@@ -79,24 +79,78 @@ def handleMicroPub():
         if request.method == 'POST':
             domain   = baseDomain(me, includeScheme=False)
             idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
-            if domain == idDomain and checkAccessToken(access_token):
+            if domain == idDomain:
+                payload    = request.get_json()
                 properties = {}
-                for key in ('h', 'name', 'summary', 'content', 'published', 'updated',
-                            'slug', 'location', 'syndication', 'syndicate-to',
-                            'in-reply-to', 'repost-of', 'like-of', 'bookmark-of'):
-                    properties[key] = request.form.get(key)
-                for key in request.form.keys():
-                    if key.lower().startswith('mp-'):
-                        properties[key.lower()] = request.form.get(key)
-                properties['category'] = request.form.getlist('category[]')
-                properties['html']     = request.form.getlist('content[html]')
-                for key in properties:
-                    current_app.logger.info('    %s = [%s]' % (key, properties[key]))
                 data = { 'domain':     domain,
                          'app':        client_id,
                          'scope':      scope,
-                         'properties': properties
                        }
+
+                if payload is None:
+                    properties['payload'] = []
+                    for key, value in request.form.iteritems(multi=True):
+                        current_app.logger.info('      %s --> %s' % (key, value))
+                        properties['payload'].append((key, value))
+
+                    properties['type']   = [ 'h-%s' % request.form.get('h') ]
+                    properties['action'] = 'create'
+
+                    for key in ('name', 'summary', 'published', 'updated',
+                                'slug', 'location', 'syndication', 'syndicate-to',
+                                'in-reply-to', 'repost-of', 'like-of', 'bookmark-of'):
+                        properties[key] = [ request.form.get(key) ]
+                    for key in request.form.keys():
+                        if key.lower().startswith('mp-'):
+                            properties[key.lower()] = request.form.get(key)
+
+                    properties['photo'] = list(zip(request.form.getlist('photo[value]'),
+                                                   request.form.getlist('photo[alt]')))
+                    if 'photo' in request.form.keys():
+                        properties['photo'].append((request.form.get('photo'), '' ))
+
+                    properties['category'] = []
+                    cat = request.form.get('category')
+                    if cat is not None:
+                        properties['category'].append(cat)
+                    for key, value in request.form.iteritems(multi=True):
+                        if key.lower().startswith('category['):
+                            properties['category'].append(value)
+
+                    content = request.form.get('content')
+                    if content is not None:
+                        properties['content'] = content.replace('\r\n', '\n').split('\n')
+
+                    properties['html'] = request.form.getlist('content[html]')
+                else:
+                    if 'action' in payload:
+                        properties['action'] = payload['action']
+                    properties['type']   = payload['type']
+                    properties['payload'] = payload
+                    for key in payload['properties']:
+                        properties[key] = payload['properties'][key]
+                    for key in ('name', 'summary', 'published', 'updated',
+                                'slug', 'location', 'syndication', 'syndicate-to',
+                                'in-reply-to', 'repost-of', 'like-of', 'bookmark-of'):
+                        if key not in properties:
+                            properties[key] = []
+                    if 'content' in properties:
+                        f = False
+                        for item in properties['content']:
+                            if isinstance(item, dict):
+                                if 'html' in item:
+                                    properties['html'] = item['html']
+                                    f = True
+                        if f:
+                            properties['content'] = []
+                        if 'photo' in payload:
+                            photos = []
+                            for photo in properties['photo']:
+                                photos.append((photo, ''))
+                            properties['photo'] = photos
+                data['properties'] = properties
+                for key in data['properties']:
+                    current_app.logger.info('    %s = %s' % (key, data['properties'][key]))
                 return micropub(request.method, data)
             else:
                 return 'Unauthorized', 403
@@ -246,8 +300,15 @@ def handleAccessToken():
                     current_app.dbRedis.hset(key, 'code',  code)
                     current_app.dbRedis.hset(key, 'token', token)
                     current_app.dbRedis.expire(key, current_app.config['AUTH_TIMEOUT'])
-                    current_app.dbRedis.set('token-%s' % token, key)
-                    current_app.dbRedis.expire('token-%s' % code, current_app.config['AUTH_TIMEOUT'])
+                    current_app.dbRedis.set('token-%s' % token, 'app-%s-%s-%s' % (me, data['client_id'], data['scope']))
+                    current_app.dbRedis.expire('token-%s' % token, current_app.config['AUTH_TIMEOUT'])
+                    app_key = 'app-%s-%s-%s' % (me, data['client_id'], data['scope'])
+                    current_app.dbRedis.hset(app_key, 'auth_url',     data['auth_url'])
+                    current_app.dbRedis.hset(app_key, 'redirect_uri', data['redirect_uri'])
+                    current_app.dbRedis.hset(app_key, 'client_id',    data['client_id'])
+                    current_app.dbRedis.hset(app_key, 'scope',        data['scope'])
+                    current_app.dbRedis.expire(app_key, current_app.config['AUTH_TIMEOUT'])  # expire in N minutes unless successful
+
                     return 'Access Token: %s' % token, 200
                 else:
                     current_app.logger.info('login invalid')

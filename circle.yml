@@ -1,9 +1,6 @@
-machine:
-  python:
-      version: 2.7.12
-
 dependencies:
   override:
+    - cd /home/ubuntu/.pyenv/plugins/python-build/../.. && git pull && cd -
     - pip install -U pip
     - make dev
 

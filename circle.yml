@@ -1,11 +1,11 @@
 machine:
   python:
-      version: 2.7.10
+      version: 2.7.12
 
 dependencies:
   override:
     - pip install -U pip
-    - make install-dev
+    - make dev
 
 test:
   pre:

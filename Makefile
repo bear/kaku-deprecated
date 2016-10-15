@@ -3,8 +3,8 @@
 help:
 	@echo "This project assumes that an active Python virtualenv is present."
 	@echo "The following make targets are available:"
-	@echo "  install     install dependencies"
-	@echo "  install-dev install development dependencies"
+	@echo "  env         install all production dependencies"
+	@echo "  dev         install all dev and production dependencies (pyenv is assumed)"
 	@echo "  clean       remove unwanted files"
 	@echo "  lint        flake8 lint check"
 	@echo "  test        run unit tests"
@@ -18,34 +18,40 @@ install-hook:
 install-uwsgi:
 	pip install uwsgi
 
-install:
-	pip install -Ur requirements.txt
+env:
+	pyenv install -s 2.7.12
+	pyenv install -s 3.5.2
+	pyenv local 2.7.12 3.5.2
+	pip install -U pip
 
-install-dev: install
+dev: env
+	pip install -Ur requirements.txt
 	pip install -Ur requirements-test.txt
+
+info:
+	@python --version
+	@pyenv --version
+	@pip --version
 
 clean:
 	python manage.py clean
 
-lint: clean
+lint: info
 	@rm -f violations.flake8.txt
 	flake8 --exclude=env --exclude=archive . > violations.flake8.txt
 
 test: lint
 	python manage.py test
 
-coverage:
+tox: clean
+	tox
+
+coverage: clean
 	@coverage run --source=kaku manage.py test
 	@coverage html
 	@coverage report
 
-info:
-	@uname -a
-	@pyenv --version
-	@pip --version
-	@python --version
-
-ci: info clean coverage
+ci: info tox coverage
 	CODECOV_TOKEN=`cat .codecov-token` codecov
 
 server:

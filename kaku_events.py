@@ -10,6 +10,7 @@ import json
 import uuid
 import types
 import errno
+import shutil
 import logging
 import datetime
 import argparse
@@ -366,7 +367,7 @@ def checkPost(targetFile, eventData):
             micropub = eventData['micropub']
             if 'content' in micropub:
                 content = micropub['content']
-            if 'html' in micropub:
+            if 'html' in micropub and len(micropub['html']) > 0:
                 content.append(micropub['html'])
             if 'category' in micropub:
                 categories = ','.join(micropub['category'])
@@ -379,11 +380,23 @@ def checkPost(targetFile, eventData):
                     else:
                         t = ''
                     content.append('<img src="%s"%s></img>' % (url, t))
+            logger.info(micropub.keys())
+            if 'photo_files' in micropub:
+                for filename in micropub['photo_files']:
+                    photoSrc = os.path.join(cfg.paths.uploads, filename)
+                    photoTgt = os.path.join(cfg.paths.output, 'images', filename)
+                    logger.info('photo file: %s %s %s' % (filename, photoSrc, photoTgt))
+                    shutil.copyfile(photoSrc, photoTgt)
+                    url = '%s%s%s/%s' % (cfg.baseurl, cfg.baseroute, 'images', filename)
+                    content.append('<img src="%s"></img>' % url)
+
             # location    = "geo:40.0958,-74.90736;u=92"
             # in-reply-to = "https://bear.im/bearlog/2016/123/testing-delete.html"
             # bookmark-of = "https://bear.im"
             # category    = [u'code', u'indieweb']
             # html        = [u'<p>something</p><p class="">line2</p><p class="">line3<br></p><p class=""><br></p>']
+            logger.info('content: %d %s' % (len(content), content))
+
             data = { 'created':   eventData['timestamp'],
                      'published': eventData['timestamp'],
                      'slug':      eventData['slug'],
@@ -586,11 +599,14 @@ def handlePost(eventAction, eventData):
         postUpdate(targetFile, eventAction)
 
     elif eventAction == 'undelete':
+        logger.info(eventData.keys())
         if 'url' in eventData:
             targetURL   = urlparse(eventData['url'])
             targetRoute = targetURL.path.replace(cfg.baseroute, '')
-            targetFile  = os.path.join(cfg.paths.content, targetRoute[1:])
+            targetFile  = os.path.join(cfg.paths.content, targetRoute)
+            logger.info('checking delete marker %s.deleted' % targetFile)
             if os.path.exists('%s.deleted' % targetFile):
+                logger.info('removing delete marker')
                 os.remove('%s.deleted' % targetFile)
                 postUpdate(targetFile, eventAction)
     indexUpdate()

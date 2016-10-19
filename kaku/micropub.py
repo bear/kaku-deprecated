@@ -42,12 +42,17 @@ def determineSummary(mpData, timestamp):
     mpSummary = mpData['summary']
     if len(mpSummary) > 0 and mpSummary[0] is not None:
         summary = ' '.join(mpData['summary'])
+    current_app.logger.info('%d [%s]' % (len(summary), summary))
     if len(summary) == 0:
-        if 'content' in mpData and mpData['content'] is not None and len(mpData['content']) > 0:
-            summary           = mpData['content'][0]
-            mpData['content'] = mpData['content'][1:]
+        if 'content' in mpData and mpData['content'] is not None and len(mpData['content']) > 1:
+            summary = mpData['content'][0]
+            if len(summary) > 0:
+                mpData['content'] = mpData['content'][1:]
+            current_app.logger.info('summary: %s' % summary)
+            current_app.logger.info('mpData[content]: %s' % mpData['content'])
     if len(summary) == 0:
         summary = 'micropub post %s' % timestamp.strftime('%H%M%S')
+    current_app.logger.info('summary: %s' % summary)
     return summary
 
 # TODO: figure out how to make the calculation of the location configurable
@@ -61,10 +66,20 @@ def generateLocation(timestamp, slug):
 def micropub(event, mpData):
     if event == 'POST':
         properties = mpData['properties']
-        if properties['action'] == 'create':
+
+        if 'action' in properties:
+            action = properties['action'].lower()
+        elif 'mp-action' in properties and properties['mp-action'] is not None:
+            action = properties['mp-action'].lower()
+        else:
+            action = None
+        if action == 'create':
             if 'type' in properties and properties['type'] is not None:
                 if properties['type'][0].lower() not in ('entry', 'h-entry'):
                     return ('Micropub CREATE requires a valid type parameter', 400, {})
+            if 'content' not in properties and 'summary' in properties:
+                properties['content'] = [ '\n'.join(properties['summary']) ]
+                properties['summary'] = []
             if 'content' in properties or 'html' in properties:
                 try:
                     utcdate    = datetime.datetime.utcnow()
@@ -93,7 +108,7 @@ def micropub(event, mpData):
                     return ('Unable to process Micropub request', 400, {})
             else:
                 return ('Micropub CREATE requires a content or html property', 400, {})
-        elif properties['action'] == 'update':
+        elif action == 'update':
             if 'url' not in properties:
                 return ('Micropub UPDATE requires a url property', 400, {})
             location   = properties['url'].strip()
@@ -123,20 +138,18 @@ def micropub(event, mpData):
                 else:
                     return ('Micropub UPDATE failed for %s - currently only REPLACE is supported' % location, 406, {})
 
-        elif 'mp-action' in properties and properties['mp-action'] is not None:
-            action = properties['mp-action'].lower()
-            if action in ('delete', 'undelete'):
-                if 'url' in properties and properties['url'] is not None:
-                    url = properties['url']
-                    try:
-                        data = { 'url': url }
-                        kakuEvent('post', action, data)
-                        return ('Micropub %s successful for %s' % (action, url), 202, {'Location': url})
-                    except:
-                        current_app.logger.exception('Exception during micropub handling')
-                        return ('Unable to process Micropub request', 400, {})
-                else:
-                    return ('Micropub %s request requires a URL' % action, 400, {})
+        elif action in ('delete', 'undelete'):
+            if 'url' in properties and properties['url'] is not None:
+                url = properties['url']
+                try:
+                    data = { 'url': url }
+                    kakuEvent('post', action, data)
+                    return ('Micropub %s successful for %s' % (action, url), 200, {'Location': url})
+                except:
+                    current_app.logger.exception('Exception during micropub handling')
+                    return ('Unable to process Micropub request', 400, {})
+            else:
+                return ('Micropub %s request requires a URL' % action, 400, {})
         else:
             return ('Invalid Micropub CREATE request', 400, {})
     else:

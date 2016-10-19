@@ -3,6 +3,7 @@
 :copyright: (c) 2016 by Mike Taylor
 :license: CC0 1.0 Universal, see LICENSE for more details.
 """
+import os
 import uuid
 import urllib
 
@@ -10,6 +11,7 @@ import ninka
 import requests
 
 from flask import Blueprint, current_app, request, redirect, render_template, jsonify
+from werkzeug import secure_filename
 from flask_wtf import Form
 from wtforms import TextField, HiddenField
 from urlparse import ParseResult
@@ -87,14 +89,26 @@ def handleMicroPub():
                          'scope':      scope,
                        }
 
+                photo_files = []
+                for key in ('photo', 'photo[]'):
+                    items = request.files.getlist(key)
+                    current_app.logger.info('multipart: %s %d %s' % (key, len(items), items))
+                    for item in items:
+                        filename = secure_filename(item.filename)
+                        photo_files.append(filename)
+                        item.save(os.path.join(current_app.config['UPLOADS'], filename))
+                        current_app.logger.info('    %s' % filename)
+
+                current_app.logger.info('photo_files: %d %s' % (len(photo_files), photo_files))
+
                 if payload is None:
+                    properties['type']    = [ 'h-%s' % request.form.get('h') ]
+                    properties['action']  = 'create'
                     properties['payload'] = []
                     for key, value in request.form.iteritems(multi=True):
                         current_app.logger.info('      %s --> %s' % (key, value))
                         properties['payload'].append((key, value))
-
-                    properties['type']   = [ 'h-%s' % request.form.get('h') ]
-                    properties['action'] = 'create'
+                        properties[key] = value
 
                     for key in ('name', 'summary', 'published', 'updated',
                                 'slug', 'location', 'syndication', 'syndicate-to',
@@ -123,12 +137,14 @@ def handleMicroPub():
 
                     properties['html'] = request.form.getlist('content[html]')
                 else:
-                    if 'action' in payload:
-                        properties['action'] = payload['action']
-                    properties['type']   = payload['type']
                     properties['payload'] = payload
-                    for key in payload['properties']:
-                        properties[key] = payload['properties'][key]
+                    properties['action']  = 'create'
+                    properties['type']    = 'h-entry'
+                    for key in payload:
+                        properties[key] = payload[key]
+                    if 'properties' in payload:
+                        for key in payload['properties']:
+                            properties[key] = payload['properties'][key]
                     for key in ('name', 'summary', 'published', 'updated',
                                 'slug', 'location', 'syndication', 'syndicate-to',
                                 'in-reply-to', 'repost-of', 'like-of', 'bookmark-of'):
@@ -143,11 +159,20 @@ def handleMicroPub():
                                     f = True
                         if f:
                             properties['content'] = []
-                        if 'photo' in payload:
+                        if 'photo' in properties:
                             photos = []
-                            for photo in properties['photo']:
-                                photos.append((photo, ''))
+                            for item in properties['photo']:
+                                photo = ''
+                                alt   = ''
+                                if type(item) is dict:
+                                    photo = item['value']
+                                    if 'alt' in item:
+                                        alt = item['alt']
+                                else:
+                                    photo = item
+                                photos.append((photo, alt))
                             properties['photo'] = photos
+                properties['photo_files'] = photo_files
                 data['properties'] = properties
                 for key in data['properties']:
                     current_app.logger.info('    %s = %s' % (key, data['properties'][key]))

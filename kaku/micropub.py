@@ -38,21 +38,20 @@ def createSlug(title, delim=u'-'):
 
 # TODO: figure out how to make determination of the title configurable
 def determineSummary(mpData, timestamp):
-    summary   = ''
-    mpSummary = mpData['summary']
-    if len(mpSummary) > 0 and mpSummary[0] is not None:
-        summary = ' '.join(mpData['summary'])
-    current_app.logger.info('%d [%s]' % (len(summary), summary))
+    summary = ''
+    if 'summary' in mpData and mpData['summary'] is not None:
+        summary = mpData['summary']
+        if type(summary) is list:
+            summary = ' '.join(summary)
     if len(summary) == 0:
         if 'content' in mpData and mpData['content'] is not None and len(mpData['content']) > 1:
             summary = mpData['content'][0]
             if len(summary) > 0:
                 mpData['content'] = mpData['content'][1:]
-            current_app.logger.info('summary: %s' % summary)
-            current_app.logger.info('mpData[content]: %s' % mpData['content'])
     if len(summary) == 0:
         summary = 'micropub post %s' % timestamp.strftime('%H%M%S')
     current_app.logger.info('summary: %s' % summary)
+    current_app.logger.info('mpData[content]: %s' % mpData['content'])
     return summary
 
 # TODO: figure out how to make the calculation of the location configurable
@@ -74,9 +73,6 @@ def micropub(event, mpData):
             action = None
         if action == 'create':
             # https://www.w3.org/TR/2016/CR-micropub-20160816/#create
-            if 'type' in properties and properties['type'] is not None:
-                if properties['type'][0].lower() not in ('entry', 'h-entry'):
-                    return ('Micropub CREATE requires a valid type parameter', 400, {})
             if 'content' not in properties and 'summary' in properties:
                 properties['content'] = [ '\n'.join(properties['summary']) ]
                 properties['summary'] = []
@@ -150,12 +146,10 @@ def micropub(event, mpData):
             # https://www.w3.org/TR/2016/CR-micropub-20160816/#delete
             if 'url' in properties and properties['url'] is not None:
                 url = properties['url']
-                data = { 'slug': slug,
-                         'url':  location,
-                       }
+                data = { 'url': url }
                 try:
                     kakuEvent('post', action, data)
-                    return ('Micropub %s successful for %s' % (action, url), 200, {'Location': url})
+                    return ('Micropub %s of %s successful' % (action, url), 200, {'Location': url})
                 except:
                     current_app.logger.exception('Exception during micropub handling')
                     return ('Unable to process Micropub request', 400, {})

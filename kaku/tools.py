@@ -10,9 +10,8 @@ import uuid
 import requests
 
 from urlparse import urlparse
-
 from flask import current_app, session
-
+from bearlib.tools import baseDomain
 
 def kakuEvent(eventType, eventAction, eventData):
     """Publish a Kaku event.
@@ -76,6 +75,24 @@ def checkAccessToken(access_token):
             return None, None, None
     else:
         return None, None, None
+
+def validateAccessToken(token):
+    try:
+        if token:
+            token = token.replace('Bearer ', '')
+        me, client_id, scope = checkAccessToken(token)
+        current_app.logger.info('[%s] [%s] [%s] [%s]' % (token, me, client_id, scope))
+        if me is None or client_id is None:
+            return me, client_id, scope, False
+        else:
+            return me, client_id, scope, True
+    except:
+        current_app.logger.exception('Exception during access token validation')
+    return None, None, None, None, False
+
+def validateDomain(domain):
+    idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
+    return domain == idDomain
 
 def validURL(targetURL):
     """Validate the target URL exists by making a HEAD request for it

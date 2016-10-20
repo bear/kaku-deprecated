@@ -587,7 +587,7 @@ def handlePost(eventAction, eventData):
         if eventAction == 'delete':
             with open('%s.deleted' % targetFile, 'a'):
                 os.utime('%s.deleted' % targetFile, None)
-
+            changed = True
         elif eventAction == 'update':
             actionData = eventData['micropub']
             actionKey  = eventData['actionkey']

@@ -118,23 +118,28 @@ def micropub(event, mpData):
             if pathItems[-1].lower() == 'html':
                 targetPath = '.'.join(pathItems[:-1])
             slug       = targetPath.replace(current_app.config['BASEROUTE'], '')
-            targetFile = '%s.md' % os.path.join(current_app.config['SITE_CONTENT'], slug)
+            targetFile = '%s.json' % os.path.join(current_app.config['SITE_CONTENT'], slug)
 
             if not os.path.exists(targetFile):
                 return ('Micropub UPDATE failed for %s - location does not exist' % location, 404, {})
             else:
-                if 'replace' in properties:
-                    try:
-                        data = { 'slug':     slug,
-                                 'url':      location,
-                                 'micropub': properties['replace'],
-                               }
-                        current_app.logger.info('micropub UPDATE (replace) event for [%s]' % slug)
-                        kakuEvent('post', 'update', data)
-                        return ('Micropub UPDATE successful for %s' % location, 202, {'Location': location})
-                    except:
-                        current_app.logger.exception('Exception during micropub handling')
-                        return ('Unable to process Micropub request', 400, {})
+                for key in ('add', 'delete', 'replace'):
+                    if key in properties:
+                        if type(properties[key]) is list:
+                            try:
+                                data = { 'slug':      slug,
+                                         'url':       location,
+                                         'micropub':  properties[key],
+                                         'actionkey': key
+                                       }
+                                current_app.logger.info('micropub UPDATE (%s) event for [%s]' % (key, slug))
+                                kakuEvent('post', 'update', data)
+                                return ('Micropub UPDATE successful for %s' % location, 200, {'Location': location})
+                            except:
+                                current_app.logger.exception('Exception during micropub handling')
+                                return ('Unable to process Micropub request', 400, {})
+                        else:
+                            return ('Unable to process Micropub request', 400, {})
                 else:
                     return ('Micropub UPDATE failed for %s - currently only REPLACE is supported' % location, 406, {})
 

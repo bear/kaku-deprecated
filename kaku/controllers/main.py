@@ -5,6 +5,7 @@
 """
 import os
 import uuid
+import json
 import urllib
 
 import ninka
@@ -14,7 +15,7 @@ from flask import Blueprint, current_app, request, redirect, render_template, js
 from werkzeug import secure_filename
 from flask_wtf import Form
 from wtforms import TextField, HiddenField
-from urlparse import ParseResult
+from urlparse import ParseResult, urlparse
 from kaku.tools import checkAccessToken, validURL, clearAuth
 from kaku.micropub import micropub
 from kaku.mentions import mention
@@ -63,6 +64,34 @@ def handleWebmention():
                 return 'Webmention target was not found', 400
         else:
             return 'Webmention target is not valid', 400
+
+@main.route('/media', methods=['GET', 'POST'])
+def handleMedia():
+    current_app.logger.info('handleMedia [%s]' % request.method)
+
+    access_token = request.headers.get('Authorization')
+    if access_token:
+        access_token = access_token.replace('Bearer ', '')
+    me, client_id, scope = checkAccessToken(access_token)
+    current_app.logger.info('[%s] [%s] [%s] [%s]' % (access_token, me, client_id, scope))
+
+    if me is None or client_id is None:
+        return ('Access Token missing', 401, {})
+    else:
+        if request.method == 'POST':
+            domain   = baseDomain(me, includeScheme=False)
+            idDomain = baseDomain(current_app.config['CLIENT_ID'], includeScheme=False)
+            if domain == idDomain:
+                item = request.files.get('file')
+                filename = secure_filename(item.filename)
+                item.save(os.path.join(current_app.config['MEDIA_FILES'], filename))
+                current_app.logger.info('    %s' % filename)
+                location = '%s%simages/%s' % (current_app.config['BASEURL'], current_app.config['BASEROUTE'], filename)
+                return ('Media successful for %s' % location, 201, {'Location': location})
+            else:
+                return 'Unauthorized', 403
+        else:
+            return 'not implemented', 501
 
 @main.route('/micropub', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
 def handleMicroPub():
@@ -182,14 +211,70 @@ def handleMicroPub():
         elif request.method == 'GET':
             q = request.args.get('q')
             current_app.logger.info('GET q [%s]' % q)
-            if q is not None and q.lower() == 'syndicate-to':
-                if request_wants_json:
-                    resp             = jsonify({ 'syndicate-to': current_app.config['SITE_SYNDICATE'] })
-                    resp.status_code = 200
-                    return resp
+            if q is not None:
+                q  = q.lower()
+                rj = { 'media-endpoint': current_app.config['MEDIA_ENDPOINT'],
+                       'syndicate-to': current_app.config['SITE_SYNDICATE'] }
+                r  = '&'.join(map('syndicate-to[]={0}'.format, map(urllib.quote, current_app.config['SITE_SYNDICATE'])))
+                r += '&media-endpoint=%s' % (current_app.config['MEDIA_ENDPOINT'])
+                if q == 'config':
+                    if request_wants_json:
+                        resp             = jsonify(rj)
+                        resp.status_code = 200
+                        return resp
+                    else:
+                        return (r, 200, {'Content-Type': 'application/x-www-form-urlencoded'})
+                elif q == 'syndicate-to':
+                    if request_wants_json:
+                        resp             = jsonify(rj)
+                        resp.status_code = 200
+                        return resp
+                    else:
+                        return (r, 200, {'Content-Type': 'application/x-www-form-urlencoded'})
+                elif q == 'source':
+                    # https://www.w3.org/TR/micropub/#source-content
+
+                    url        = request.args.get('url')
+                    properties = []
+                    for key in ('properties', 'properties[]'):
+                        item = request.args.getlist(key)
+                        if len(item) > 0:
+                            properties += item
+                    current_app.logger.info('url: %s properties: %d %s' % (url, len(properties), properties))
+
+                    # "If no properties are specified, then the response must include all properties,
+                    #  as well as a type property indicating the vocabulary of the post."
+                    if len(properties) == 0:
+                        properties = ['type', 'category', 'content', 'published']
+
+                    targetPath = urlparse(url).path
+                    pathItems  = targetPath.split('.')
+                    current_app.logger.info('[%s] %s' % (targetPath, pathItems))
+                    if pathItems[-1].lower() == 'html':
+                        targetPath = '.'.join(pathItems[:-1])
+                    slug       = targetPath.replace(current_app.config['BASEROUTE'], '')
+                    targetFile = '%s.json' % os.path.join(current_app.config['SITE_CONTENT'], slug)
+                    current_app.logger.info('targetFile: %s' % targetFile)
+                    if os.path.exists(targetFile):
+                        with open(targetFile, 'r') as h:
+                            post = json.load(h)
+                        rj = { "type": ["h-entry"], "properties": {} }
+                        # if 'type' in properties:
+                        #     rj['type'] = ['h-entry']
+                        if 'published' in properties:
+                            rj['properties']['published'] = [ post['published'] ]
+                        if 'category' in properties and len(post['tags']) > 0:
+                            rj['properties']['category'] = post['tags'].split(',')
+                        if 'content' in properties:
+                            rj['properties']['content'] = post['content'].split('\n')
+                        current_app.logger.info(json.dumps(rj))
+                        resp = jsonify(rj)
+                        resp.status_code = 200
+                        return resp
+                    else:
+                        return 'not found', 404
                 else:
-                    return ('&'.join(map('syndicate-to[]={0}'.format, map(urllib.quote, current_app.config['SITE_SYNDICATE']))),
-                            200, {'Content-Type': 'application/x-www-form-urlencoded'})
+                    return 'not implemented', 501
             else:
                 return 'not implemented', 501
         else:

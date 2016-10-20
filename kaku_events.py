@@ -576,27 +576,67 @@ def handlePost(eventAction, eventData):
         checkPost(targetFile, eventData)
         postUpdate(targetFile, eventAction)
 
-    elif eventAction in ('update', 'delete'):
+    elif eventAction in ('update', 'delete', 'add'):
         if 'file' in eventData:
             targetFile = eventData['file']
         else:
             targetURL   = urlparse(eventData['url'])
             targetRoute = targetURL.path.replace(cfg.baseroute, '')
             targetFile  = os.path.join(cfg.paths.content, targetRoute)
-
+        changed = False
         if eventAction == 'delete':
             with open('%s.deleted' % targetFile, 'a'):
                 os.utime('%s.deleted' % targetFile, None)
 
         elif eventAction == 'update':
-            micropub        = eventData['micropub']
-            data            = loadMetadata(targetFile)
-            data['content'] = '\n'.join(micropub['content'])
-            if 'category' in micropub:
-                data['tags'] = ','.join(micropub['category'])
-            writeMD(targetFile, data)
+            actionData = eventData['micropub']
+            actionKey  = eventData['actionkey']
+            data       = loadMetadata(targetFile)
+            for key in ('slug', 'tags', 'content', 'html'):
+                logger.info(' -- %s: %s' % (key, data[key]))
+            logger.info('update (%s) %s' % (actionKey, json.dumps(actionData)))
+            if actionKey == 'replace':
+                if 'content' in actionData:
+                    data['content'] = '\n'.join(actionData['content'])
+                    changed         = True
+                if 'category' in actionData:
+                    tags = data['tags'].split(',')
+                    for tag in actionData['category']:
+                        if tag not in tags:
+                            tags.append(tag)
+                            changed = True
+                    data['tags'] = ','.join(tags)
+            elif actionKey == 'add':
+                if 'content' in actionData:
+                   data['content'] += '\n'.join(actionData['content'])
+                   changed          = True
+                if 'category' in actionData:
+                    tags = data['tags'].split(',')
+                    for tag in actionData['category']:
+                        if tag not in tags:
+                            tags.append(tag)
+                            changed = True
+                    data['tags'] = ','.join(tags)
+            elif actionKey == 'delete':
+                if 'category' in actionData:
+                    if type(actionData) is dict:
+                        tags = data['tags'].split(',')
+                        for tag in actionData['category']:
+                            if tag in tags:
+                                tags.remove(tag)
+                                changed = True
+                        data['tags'] = ','.join(tags)
+                    else:
+                        data['tags'] = ''
+                        changed      = True
+            for key in ('slug', 'tags', 'content', 'html'):
+                logger.info(' -- %s: %s' % (key, data[key]))
+            if changed:
+                writeMD(targetFile, data)
+                saveMetadata(targetFile, data)
 
-        postUpdate(targetFile, eventAction)
+        if changed:
+            postUpdate(targetFile, eventAction)
 
     elif eventAction == 'undelete':
         logger.info(eventData.keys())

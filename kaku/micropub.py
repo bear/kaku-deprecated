@@ -66,7 +66,6 @@ def generateLocation(timestamp, slug):
 def micropub(event, mpData):
     if event == 'POST':
         properties = mpData['properties']
-
         if 'action' in properties:
             action = properties['action'].lower()
         elif 'mp-action' in properties and properties['mp-action'] is not None:
@@ -74,6 +73,7 @@ def micropub(event, mpData):
         else:
             action = None
         if action == 'create':
+            # https://www.w3.org/TR/2016/CR-micropub-20160816/#create
             if 'type' in properties and properties['type'] is not None:
                 if properties['type'][0].lower() not in ('entry', 'h-entry'):
                     return ('Micropub CREATE requires a valid type parameter', 400, {})
@@ -108,7 +108,9 @@ def micropub(event, mpData):
                     return ('Unable to process Micropub request', 400, {})
             else:
                 return ('Micropub CREATE requires a content or html property', 400, {})
+
         elif action == 'update':
+            # https://www.w3.org/TR/2016/CR-micropub-20160816/#update
             if 'url' not in properties:
                 return ('Micropub UPDATE requires a url property', 400, {})
             location   = properties['url'].strip()
@@ -119,20 +121,21 @@ def micropub(event, mpData):
                 targetPath = '.'.join(pathItems[:-1])
             slug       = targetPath.replace(current_app.config['BASEROUTE'], '')
             targetFile = '%s.json' % os.path.join(current_app.config['SITE_CONTENT'], slug)
-
+            data = { 'slug': slug,
+                     'url':  location,
+                   }
             if not os.path.exists(targetFile):
                 return ('Micropub UPDATE failed for %s - location does not exist' % location, 404, {})
             else:
                 for key in ('add', 'delete', 'replace'):
                     if key in properties:
-                        if type(properties[key]) is list:
+                        # "The values of each property inside the replace, add or delete keys must be an array,
+                        #  even if there is only a single value."
+                        if type(properties[key]) is dict:
+                            data['micropub'] = properties[key]
+                            data['actionkey'] = key
+                            current_app.logger.info('micropub UPDATE (%s) event for [%s]' % (key, slug))
                             try:
-                                data = { 'slug':      slug,
-                                         'url':       location,
-                                         'micropub':  properties[key],
-                                         'actionkey': key
-                                       }
-                                current_app.logger.info('micropub UPDATE (%s) event for [%s]' % (key, slug))
                                 kakuEvent('post', 'update', data)
                                 return ('Micropub UPDATE successful for %s' % location, 200, {'Location': location})
                             except:
@@ -144,10 +147,13 @@ def micropub(event, mpData):
                     return ('Micropub UPDATE failed for %s - currently only REPLACE is supported' % location, 406, {})
 
         elif action in ('delete', 'undelete'):
+            # https://www.w3.org/TR/2016/CR-micropub-20160816/#delete
             if 'url' in properties and properties['url'] is not None:
                 url = properties['url']
+                data = { 'slug': slug,
+                         'url':  location,
+                       }
                 try:
-                    data = { 'url': url }
                     kakuEvent('post', action, data)
                     return ('Micropub %s successful for %s' % (action, url), 200, {'Location': url})
                 except:

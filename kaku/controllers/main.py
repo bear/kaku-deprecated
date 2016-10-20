@@ -96,8 +96,6 @@ def handleMedia():
 @main.route('/micropub', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
 def handleMicroPub():
     current_app.logger.info('handleMicroPub [%s]' % request.method)
-    # form = MicroPubForm()
-
     access_token = request.headers.get('Authorization')
     if access_token:
         access_token = access_token.replace('Bearer ', '')
@@ -209,31 +207,33 @@ def handleMicroPub():
             else:
                 return 'Unauthorized', 403
         elif request.method == 'GET':
-            q = request.args.get('q')
-            current_app.logger.info('GET q [%s]' % q)
-            if q is not None:
-                q  = q.lower()
-                rj = { 'media-endpoint': current_app.config['MEDIA_ENDPOINT'],
-                       'syndicate-to': current_app.config['SITE_SYNDICATE'] }
-                r  = '&'.join(map('syndicate-to[]={0}'.format, map(urllib.quote, current_app.config['SITE_SYNDICATE'])))
-                r += '&media-endpoint=%s' % (current_app.config['MEDIA_ENDPOINT'])
-                if q == 'config':
+            # https://www.w3.org/TR/2016/CR-micropub-20160816/#querying
+            query = request.args.get('q')
+            current_app.logger.info('query [%s]' % query)
+            if query is not None:
+                query  = query.lower()
+                respJson  = { 'media-endpoint': current_app.config['MEDIA_ENDPOINT'],
+                              'syndicate-to': current_app.config['SITE_SYNDICATE'] }
+                respParam  = '&'.join(map('syndicate-to[]={0}'.format, map(urllib.quote, current_app.config['SITE_SYNDICATE'])))
+                respParam += '&media-endpoint=%s' % (current_app.config['MEDIA_ENDPOINT'])
+                if query == 'config':
+                    # https://www.w3.org/TR/2016/CR-micropub-20160816/#configuration
                     if request_wants_json:
-                        resp             = jsonify(rj)
+                        resp             = jsonify(respJson)
                         resp.status_code = 200
                         return resp
                     else:
-                        return (r, 200, {'Content-Type': 'application/x-www-form-urlencoded'})
-                elif q == 'syndicate-to':
+                        return (respParam, 200, {'Content-Type': 'application/x-www-form-urlencoded'})
+                elif query == 'syndicate-to':
+                    # https://www.w3.org/TR/2016/CR-micropub-20160816/#syndication-targets
                     if request_wants_json:
-                        resp             = jsonify(rj)
+                        resp             = jsonify(respJson)
                         resp.status_code = 200
                         return resp
                     else:
-                        return (r, 200, {'Content-Type': 'application/x-www-form-urlencoded'})
-                elif q == 'source':
-                    # https://www.w3.org/TR/micropub/#source-content
-
+                        return (respParam, 200, {'Content-Type': 'application/x-www-form-urlencoded'})
+                elif query == 'source':
+                    # https://www.w3.org/TR/2016/CR-micropub-20160816/#source-content
                     url        = request.args.get('url')
                     properties = []
                     for key in ('properties', 'properties[]'):
@@ -244,12 +244,15 @@ def handleMicroPub():
 
                     # "If no properties are specified, then the response must include all properties,
                     #  as well as a type property indicating the vocabulary of the post."
+                    # so this is a list of properties the code currently handles
                     if len(properties) == 0:
                         properties = ['type', 'category', 'content', 'published']
 
                     targetPath = urlparse(url).path
                     pathItems  = targetPath.split('.')
                     current_app.logger.info('[%s] %s' % (targetPath, pathItems))
+
+                    # normalize the url target to remove any extension
                     if pathItems[-1].lower() == 'html':
                         targetPath = '.'.join(pathItems[:-1])
                     slug       = targetPath.replace(current_app.config['BASEROUTE'], '')
@@ -258,17 +261,15 @@ def handleMicroPub():
                     if os.path.exists(targetFile):
                         with open(targetFile, 'r') as h:
                             post = json.load(h)
-                        rj = { "type": ["h-entry"], "properties": {} }
-                        # if 'type' in properties:
-                        #     rj['type'] = ['h-entry']
+                        respJson = { "type": ["h-entry"], "properties": {} }
                         if 'published' in properties:
-                            rj['properties']['published'] = [ post['published'] ]
+                            respJson['properties']['published'] = [ post['published'] ]
                         if 'category' in properties and len(post['tags']) > 0:
-                            rj['properties']['category'] = post['tags'].split(',')
+                            respJson['properties']['category'] = post['tags'].split(',')
                         if 'content' in properties:
-                            rj['properties']['content'] = post['content'].split('\n')
-                        current_app.logger.info(json.dumps(rj))
-                        resp = jsonify(rj)
+                            respJson['properties']['content'] = post['content'].split('\n')
+                        current_app.logger.info(json.dumps(respJson))
+                        resp = jsonify(respJson)
                         resp.status_code = 200
                         return resp
                     else:

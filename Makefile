@@ -1,4 +1,4 @@
-.PHONY: help clean install install-hook install-uwsgi install-dev info server uwsgi
+.PHONY: help clean install-hook install-uwsgi info server uwsgi tox
 
 help:
 	@echo "This project assumes that an active Python virtualenv is present."
@@ -6,7 +6,7 @@ help:
 	@echo "  env         install all production dependencies"
 	@echo "  dev         install all dev and production dependencies (pyenv is assumed)"
 	@echo "  clean       remove unwanted files"
-	@echo "  lint        flake8 lint check"
+	@echo "  lint        pycodestyle check"
 	@echo "  test        run unit tests"
 	@echo "  coverage    run code coverage"
 	@echo "  ci          run CI tests"
@@ -37,13 +37,12 @@ clean:
 	python manage.py clean
 
 lint: info
-	@rm -f violations.flake8.txt
-	flake8 --exclude=env --exclude=archive . > violations.flake8.txt
+	pycodestyle
 
 test: lint
 	python manage.py test
 
-tox: clean
+tox:
 	tox
 
 coverage: clean

@@ -747,6 +747,7 @@ def getRedis(redisURL):
 #     }
 # }
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='./kaku_events.cfg')

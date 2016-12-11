@@ -28,8 +28,10 @@ def buildTemplateContext(cfg):
         result[key] = value
     return result
 
+
 # from http://flask.pocoo.org/snippets/5/
 _punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
+
 def createSlug(title, delim=u'-'):
     result = []
     for word in _punct_re.split(title.lower()):

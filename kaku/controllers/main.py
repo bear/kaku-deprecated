@@ -80,6 +80,7 @@ def handleMedia():
     else:
         return 'Invalid request', 400
 
+
 _property_keys = ( 'name', 'summary', 'published', 'updated', 'category',
                    'slug', 'location', 'syndication', 'syndicate-to',
                    'in-reply-to', 'repost-of', 'like-of', 'bookmark-of' )

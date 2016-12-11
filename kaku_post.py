@@ -68,6 +68,7 @@ def verifyToken(domain, authtoken):
 
     return r.status_code == requests.codes.ok
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--domain', default='https://bear.im',
@@ -161,14 +162,14 @@ if __name__ == '__main__':
         data = { 'action':  'update',
                  'url':     post['url'],
                  'replace': {
-                    'content': [ post['content'] ],
+                      'content': [ post['content'] ],
                  }
                }
     else:
         data = { 'type': 'h-entry',
                  'properties': {
-                    'summary': [ post['summary'] ],
-                    'content': [ post['content'] ],
+                      'summary': [ post['summary'] ],
+                      'content': [ post['content'] ],
                  }
                }
         if 'tags' in post:

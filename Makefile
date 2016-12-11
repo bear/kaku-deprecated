@@ -26,7 +26,7 @@ env:
 
 dev: env
 	pip install -Ur requirements.txt
-	pip install -Ur requirements-test.txt
+	pip install -Ur requirements.testing.txt
 
 info:
 	@python --version

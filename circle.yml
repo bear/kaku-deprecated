@@ -27,10 +27,6 @@ stages:
         command: make dev
       - type: shell
         shell: /bin/bash --login
-        name: Lint
-        command: make lint
-      - type: shell
-        shell: /bin/bash --login
         name: Test
         command: make ci
       - type: shell

@@ -38,8 +38,7 @@ clean:
 	python manage.py clean
 
 lint: info
-	ls -la
-	pycodestyle -v -q
+	pycodestyle
 
 test: lint
 	python manage.py test
@@ -52,7 +51,7 @@ coverage: clean
 	@coverage html
 	@coverage report
 
-ci: info
+ci: lint
 	coverage run --source=kaku manage.py test
 
 ci-old: info coverage

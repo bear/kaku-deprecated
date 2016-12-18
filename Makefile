@@ -50,7 +50,10 @@ coverage: clean
 	@coverage html
 	@coverage report
 
-ci: info coverage
+ci: info
+	coverage run --source=kaku manage.py test
+
+ci-old: info coverage
 	CODECOV_TOKEN=`cat .codecov-token` codecov
 
 server:

@@ -11,7 +11,7 @@ stages:
       - type: checkout
       - type: shell
         name: Install Environment
-        command:  pip install -U pip pyenv
+        command:  apt-get install pyenv
       - type: shell
         name: Install Dependencies
         command: make dev

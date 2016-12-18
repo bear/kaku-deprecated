@@ -25,6 +25,3 @@ stages:
         shell: /bin/bash --login
         name: Test
         command: make ci
-      - type: shell
-        shell: /bin/bash --login
-        command: make tox

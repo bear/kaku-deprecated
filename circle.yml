@@ -24,13 +24,11 @@ stages:
       - type: shell
         shell: /bin/bash --login
         name: Install Dependencies
-        command: |
-          echo "dumping profile"
-          cat ~/.profile
-          echo "PATH is $PATH"
-          echo "PYENV_ROOT is $PYENV_ROOT"
-          make dev
+        command: make dev
       - type: shell
         shell: /bin/bash --login
         name: Test
-        command: make ci
+        command: make test
+      - type: shell
+        shell: /bin/bash --login
+        command: make coverage

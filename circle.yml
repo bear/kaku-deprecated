@@ -11,7 +11,7 @@ stages:
       - type: checkout
       - type: shell
         name: Install Environment
-        command:  pip install -U pip, wheel
+        command:  pip install -U pip wheel
       - type: shell
         name: Install Dependencies
         command: make dev

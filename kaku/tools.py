@@ -9,9 +9,29 @@ import json
 import uuid
 import requests
 
-from urlparse import urlparse
 from flask import current_app, session
-from bearlib.tools import baseDomain
+
+try:
+    # python 3
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+
+
+# from bearlib.tools import baseDomain
+def baseDomain(domain, includeScheme=True):
+    """Return only the network location portion of the given domain
+    unless includeScheme is True
+    """
+    result = ''
+    url    = urlparse(domain)
+    if includeScheme:
+        result = '%s://' % url.scheme
+    if len(url.netloc) == 0:
+        result += url.path
+    else:
+        result += url.netloc
+    return result
 
 def kakuEvent(eventType, eventAction, eventData):
     """Publish a Kaku event.

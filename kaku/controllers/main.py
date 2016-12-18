@@ -15,11 +15,15 @@ from flask import Blueprint, current_app, request, redirect, render_template, js
 from werkzeug import secure_filename
 from flask_wtf import Form
 from wtforms import TextField, HiddenField
-from urlparse import ParseResult, urlparse
-from kaku.tools import validateAccessToken, validateDomain, validURL, clearAuth
+from kaku.tools import validateAccessToken, validateDomain, validURL, clearAuth, baseDomain
 from kaku.micropub import micropub
 from kaku.mentions import mention
-from bearlib.tools import baseDomain
+
+try:
+    # python 3
+    from urllib.parse import ParseResult, urlparse
+except ImportError:
+    from urlparse import ParseResult, urlparse
 
 
 main = Blueprint('main', __name__)

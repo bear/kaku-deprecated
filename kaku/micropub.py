@@ -7,15 +7,17 @@
 import os
 import re
 import datetime
-
-from unidecode import unidecode
-from urlparse import urlparse
-
 import pytz
 
+from unidecode import unidecode
 from flask import current_app
-
 from kaku.tools import kakuEvent
+
+try:
+    # python 3
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 
 def buildTemplateContext(cfg):

@@ -15,9 +15,13 @@ from flask_wtf import Form
 from wtforms import TextField, HiddenField
 from wtforms.validators import Required
 
-from urlparse import ParseResult
-from kaku.tools import clearAuth
-from bearlib.tools import baseDomain
+from kaku.tools import clearAuth, baseDomain
+
+try:
+    # python 3
+    from urllib.parse import ParseResult
+except ImportError:
+    from urlparse import ParseResult
 
 
 auth = Blueprint('auth', __name__)

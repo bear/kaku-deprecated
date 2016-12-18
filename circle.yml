@@ -1,11 +1,11 @@
-dependencies:
-  override:
-    - cd /home/ubuntu/.pyenv/plugins/python-build/../.. && git pull && cd -
-    - pip install -U pip
-    - make dev
+version: 2
+executorType: docker
 
-test:
-  pre:
-    - lsb_release -a
-  override:
-    - make ci
+containerInfo:
+  - image: python:2.7
+
+stages:
+  build:
+    workDir: ~/kaku
+    steps:
+      - type: checkout

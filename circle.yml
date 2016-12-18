@@ -27,4 +27,4 @@ stages:
         command: make ci
       - type: shell
         shell: /bin/bash --login
-        command: make coverage
+        command: make tox

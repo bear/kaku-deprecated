@@ -48,14 +48,11 @@ tox:
 
 coverage: clean
 	@coverage run --source=kaku manage.py test
+
+ci: lint coverage
 	@coverage html
 	@coverage report
-
-ci: lint
-	coverage run --source=kaku manage.py test
-
-ci-old: info coverage
-	CODECOV_TOKEN=`cat .codecov-token` codecov
+	# CODECOV_TOKEN=`cat .codecov-token` codecov
 
 server:
 	python manage.py server

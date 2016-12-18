@@ -1,4 +1,5 @@
-[![Downloads](https://img.shields.io/pypi/v/kaku.svg)](https://pypi.python.org/pypi/kaku/)
+[![Circle CI](https://circleci.com/gh/bear/kaku.svg?style=svg)](https://circleci.com/gh/bear/kaku)
+[![CodeCov](http://codecov.io/github/bear/kaku/coverage.svg?branch=master)](http://codecov.io/github/bear/kaku)
 [![Requirements Status](https://requires.io/github/bear/kaku/requirements.svg?branch=master)](https://requires.io/github/bear/kaku/requirements/?branch=master)
 
 書く- to write

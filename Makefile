@@ -32,12 +32,14 @@ info:
 	@python --version
 	@pyenv --version
 	@pip --version
+	@pycodestyle --version
 
 clean:
 	python manage.py clean
 
 lint: info
-	pycodestyle
+	pycodestyle -v -q
+
 
 test: lint
 	python manage.py test

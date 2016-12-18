@@ -10,6 +10,9 @@ stages:
     steps:
       - type: checkout
       - type: shell
+        name: Install Environment
+        command:  pip install -U pip pyenv
+      - type: shell
         name: Install Dependencies
         command: make dev
       - type: shell

@@ -11,7 +11,10 @@ stages:
       - type: checkout
       - type: shell
         name: Install Environment
-        command:  pip install -U pip wheel pyenv
+        command:  pip install -U pip wheel
+      - type: shell
+        name: Install pyenv
+        command: curl -L https://raw.githubusercontent.com/yyuu/pyenv-installer/master/bin/pyenv-installer | bash
       - type: shell
         name: Install Dependencies
         command: make dev

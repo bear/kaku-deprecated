@@ -14,7 +14,11 @@ stages:
         command:  pip install -U pip wheel
       - type: shell
         name: Install pyenv
-        command: curl -L https://raw.githubusercontent.com/yyuu/pyenv-installer/master/bin/pyenv-installer | bash
+        command: |
+          curl -L https://raw.githubusercontent.com/yyuu/pyenv-installer/master/bin/pyenv-installer | bash
+          echo 'export PATH="/root/.pyenv/bin:$PATH"' >> ~/.bash_profile
+          echo 'eval "$(pyenv init -)"' >> ~/.bash_profile
+          echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bash_profile
       - type: shell
         name: Install Dependencies
         command: make dev

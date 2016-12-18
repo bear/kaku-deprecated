@@ -21,7 +21,12 @@ stages:
           echo 'eval "$(pyenv virtualenv-init -)"'    >> ~/.profile
       - type: shell
         name: Install Dependencies
-        command: make dev
+        command: |
+          echo "dumping profile"
+          cat ~/.profile
+          echo "PATH is $PATH"
+          echo "PYENV_ROOT is $PYENV_ROOT"
+          make dev
       - type: shell
         name: Test
         command: make ci

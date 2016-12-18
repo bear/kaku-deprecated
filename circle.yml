@@ -9,3 +9,9 @@ stages:
     workDir: ~/kaku
     steps:
       - type: checkout
+      - type: shell
+        name: Install Dependencies
+        command: make dev
+      - type: shell
+        name: Test
+        command: make ci

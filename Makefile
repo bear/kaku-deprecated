@@ -38,8 +38,7 @@ clean:
 	python manage.py clean
 
 lint: info
-	pycodestyle -v -q
-
+	pycodestyle -vv
 
 test: lint
 	python manage.py test

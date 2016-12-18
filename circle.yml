@@ -16,13 +16,9 @@ stages:
         name: Install pyenv
         command: |
           curl -L https://raw.githubusercontent.com/yyuu/pyenv-installer/master/bin/pyenv-installer | bash
-          echo "does it support ~ or not?"
-          ls -la ~/
-          echo "absolute"
-          ls -la /home/ubuntu/
-          echo 'export PATH="/root/.pyenv/bin:$PATH"' >> /home/ubuntu/.bash_profile
-          echo 'eval "$(pyenv init -)"'               >> /home/ubuntu/.bash_profile
-          echo 'eval "$(pyenv virtualenv-init -)"'    >> /home/ubuntu/.bash_profile
+          echo 'export PATH="/root/.pyenv/bin:$PATH"' >> ~/.profile
+          echo 'eval "$(pyenv init -)"'               >> ~/.profile
+          echo 'eval "$(pyenv virtualenv-init -)"'    >> ~/.profile
       - type: shell
         name: Install Dependencies
         command: make dev

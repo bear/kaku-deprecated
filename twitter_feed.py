@@ -94,7 +94,7 @@ def main(cfg, domain=None, authToken=None, tokenFile=None):
     if domain is None or authToken is None:
         return False
     else:
-        print "do something"
+        print("do something")
 
 
 if __name__ == '__main__':

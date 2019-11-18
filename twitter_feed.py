@@ -10,7 +10,12 @@ import sys
 import logging
 import argparse
 
-from urlparse import urlparse, ParseResult
+try:
+    # python 3
+    from urllib.parse import ParseResult, urlparse
+except ImportError:
+    from urlparse import ParseResult, urlparse
+
 from bearlib.tools import normalizeFilename
 from bearlib.config import Config, findConfigFile
 

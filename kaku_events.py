@@ -24,10 +24,15 @@ import markdown2
 
 from bs4 import BeautifulSoup
 from logging.handlers import RotatingFileHandler
-from urlparse import urlparse
 from dateutil.parser import parse
 from bearlib.config import Config, findConfigFile
 from bearlib.tools import normalizeFilename
+
+try:
+    # python 3
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 
 logger = logging.getLogger(__name__)

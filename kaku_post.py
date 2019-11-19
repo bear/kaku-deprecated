@@ -12,9 +12,13 @@ import argparse
 
 import requests
 import webbrowser
-
-from urlparse import urlparse, ParseResult
 from bearlib.tools import normalizeFilename
+
+try:
+    # python 3
+    from urllib.parse import ParseResult, urlparse
+except ImportError:
+    from urlparse import ParseResult, urlparse
 
 
 logger = logging.getLogger(__name__)

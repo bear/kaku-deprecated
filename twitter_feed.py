@@ -10,7 +10,12 @@ import sys
 import logging
 import argparse
 
-from urlparse import urlparse, ParseResult
+try:
+    # python 3
+    from urllib.parse import ParseResult, urlparse
+except ImportError:
+    from urlparse import ParseResult, urlparse
+
 from bearlib.tools import normalizeFilename
 from bearlib.config import Config, findConfigFile
 
@@ -94,7 +99,7 @@ def main(cfg, domain=None, authToken=None, tokenFile=None):
     if domain is None or authToken is None:
         return False
     else:
-        print "do something"
+        print("do something")
 
 
 if __name__ == '__main__':

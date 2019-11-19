@@ -45,7 +45,7 @@ def determineSummary(mpData, timestamp):
     summary = ''
     if 'summary' in mpData and mpData['summary'] is not None:
         summary = mpData['summary']
-        if type(summary) is list:
+        if isinstance(summary, list):
             summary = ' '.join(summary)
     if len(summary) == 0:
         if 'content' in mpData and mpData['content'] is not None and len(mpData['content']) > 1:
@@ -103,7 +103,7 @@ def micropub(event, mpData):
                         current_app.logger.info('micropub create event for [%s]' % slug)
                         kakuEvent('post', 'create', data)
                         return ('Micropub CREATE successful for %s' % location, 202, {'Location': location})
-                except:
+                except BaseException:
                     current_app.logger.exception('Exception during micropub handling')
                     return ('Unable to process Micropub request', 400, {})
             else:
@@ -131,14 +131,14 @@ def micropub(event, mpData):
                     if key in properties:
                         # "The values of each property inside the replace, add or delete keys must be an array,
                         #  even if there is only a single value."
-                        if type(properties[key]) is dict:
+                        if isinstance(properties[key], dict):
                             data['micropub'] = properties[key]
                             data['actionkey'] = key
                             current_app.logger.info('micropub UPDATE (%s) event for [%s]' % (key, slug))
                             try:
                                 kakuEvent('post', 'update', data)
                                 return ('Micropub UPDATE successful for %s' % location, 200, {'Location': location})
-                            except:
+                            except BaseException:
                                 current_app.logger.exception('Exception during micropub handling')
                                 return ('Unable to process Micropub request', 400, {})
                         else:
@@ -154,7 +154,7 @@ def micropub(event, mpData):
                 try:
                     kakuEvent('post', action, data)
                     return ('Micropub %s of %s successful' % (action, url), 200, {'Location': url})
-                except:
+                except BaseException:
                     current_app.logger.exception('Exception during micropub handling')
                     return ('Unable to process Micropub request', 400, {})
             else:

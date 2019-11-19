@@ -106,7 +106,7 @@ def validateAccessToken(token):
             return me, client_id, scope, False
         else:
             return me, client_id, scope, True
-    except:
+    except BaseException:
         current_app.logger.exception('Exception during access token validation')
     return None, None, None, None, False
 
@@ -121,7 +121,7 @@ def validURL(targetURL):
     try:
         r = requests.head(targetURL)
         result = r.status_code
-    except:
+    except BaseException:
         result = 404
     return result
 
@@ -159,7 +159,7 @@ def generateMentionName(targetURL, vouched, cfg):
         if f.endswith(mentionExt) and f.startswith(mentionSlug):
             try:
                 n = int(f.split('.')[-2])
-            except:
+            except BaseException:
                 n = 0
             if n > nMax:
                 nMax = n

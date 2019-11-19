@@ -128,7 +128,7 @@ if __name__ == '__main__':
         with open(tokenFile, 'r') as h:
             try:
                 authToken = h.read().strip()
-            except:
+            except BaseException:
                 authToken = None
         if authToken is None or len(authToken) == 0:
             logger.error('The authentication token found in %s appears to be empty.' % tokenFile)

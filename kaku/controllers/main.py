@@ -157,7 +157,7 @@ def handleMicroPub():
                     properties[key] = value
                     current_app.logger.info('      %s ==> %s' % (key, value))
 
-            if type(properties['content']) is dict:
+            if isinstance(properties['content'], dict):
                 if 'html' in properties['content']:
                     properties['html']    = properties['content']['html']
                     properties['content'] = []
@@ -166,7 +166,7 @@ def handleMicroPub():
                 photos = []
                 for item in properties['photo']:
                     alt = ''
-                    if type(item) is dict:
+                    if isinstance(item, dict):
                         photo = item['value']
                         if 'alt' in item:
                             alt = item['alt']

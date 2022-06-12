@@ -80,7 +80,7 @@ def validateToken(authToken=None, tokenFile=None):
                         if authToken is None or len(authToken) == 0:
                             logger.error('The authentication token found in %s appears to be empty.' % tokenFile)
                             authToken = None
-                    except:
+                    except BaseException:
                         authToken = None
     if authToken is None:
         if tokenFile is not None:
@@ -126,9 +126,9 @@ if __name__ == '__main__':
     domain    = args.domain
     tokenFile = args.tokenFile
 
-    if domain is None and type(cfg.baseurl) is str:
+    if domain is None and isinstance(cfg.baseurl, str):
         domain = cfg.baseurl
-    if tokenFile is None and type(cfg.tokenfile) is str:
+    if tokenFile is None and isinstance(cfg.tokenfile, str):
         tokenFile = cfg.tokenfile
 
     if not main(cfg, domain, tokenFile):

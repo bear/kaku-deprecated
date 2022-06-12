@@ -269,7 +269,7 @@ def checkOutboundWebmentions(sourceURL, html, targetFile, update=False):
             db.delete(key)
 
         saveOutboundWebmentions(targetFile, cached)
-    except:
+    except BaseException:
         logger.exception('exception during checkOutboundWebmentions')
 
 def postUpdate(targetFile, action=None):
@@ -326,7 +326,7 @@ def postUpdate(targetFile, action=None):
                 for meta in soup.findAll('meta', attrs={'http-equiv': lambda x: x and x.lower() == 'status'}):
                     try:
                         status = int(meta['content'].split(' ')[0])
-                    except:
+                    except BaseException:
                         pass
                 if status == 410:
                     logger.info('a mention no longer exists (via http-equiv) - removing [%s]' % key)
@@ -613,8 +613,8 @@ def handlePost(eventAction, eventData):
                     data['tags'] = ','.join(tags)
             elif actionKey == 'add':
                 if 'content' in actionData:
-                   data['content'] += '\n'.join(actionData['content'])
-                   changed          = True
+                    data['content'] += '\n'.join(actionData['content'])
+                    changed          = True
                 if 'category' in actionData:
                     tags = data['tags'].split(',')
                     for tag in actionData['category']:
@@ -624,7 +624,7 @@ def handlePost(eventAction, eventData):
                     data['tags'] = ','.join(tags)
             elif actionKey == 'delete':
                 if 'category' in actionData:
-                    if type(actionData) is dict:
+                    if isinstance(actionData, dict):
                         tags = data['tags'].split(',')
                         for tag in actionData['category']:
                             if tag in tags:
@@ -702,7 +702,7 @@ def handleEvent(eventKey):
             elif eventType == 'mention':
                 handleMentions(eventAction, eventData)
         db.expire(eventKey, 86400)
-    except:
+    except BaseException:
         logger.exception('error during event [%s]' % eventKey)
 
 def initLogging(logpath, logname):
